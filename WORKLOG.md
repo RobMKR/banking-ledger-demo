@@ -104,3 +104,33 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   dropping knownAsOf left the suite green, the tests would not have been testing bitemporality at
   all. 273 tests green.
 
+- **17:28** — Step 5, holds and authorization. `AuthorizationId`, `Hold`, `HoldRegistry`,
+  `AvailableBalance`, `AuthorizationRule`. Holds live outside the `Ledger` on purpose — a hold
+  moves no money, and merging the two would make it possible to write one into the balance by
+  accident, which is exactly the error criterion 5 tests for.
+
+  The decision that needed making: *which* ledger balance available balance is computed from.
+  This ledger has two date dimensions, so "ledger balance minus active holds" is under-specified.
+  Chose both coordinates = the current day — an authorization is decided against the money
+  actually there when it arrives, and cannot be declined using facts the ledger learns later.
+  That choice is what makes Auth-B decline: E7 is booked D5 with value_date D2, so by E8 the
+  ledger does know about it and available is -155.00, not the +465.00 that stood at D4's close.
+
+  **Criterion 5's testable half is now asserted**: placing Auth-A's 200.00 hold drops available
+  from 250.00 to 50.00 while the ledger balance stays at 250.00 and no entry is written.
+  Demonstrated on Auth-A, where the antecedent actually fires — per AMBIGUITIES §12.
+
+  **Auth-B declines** at -155.00 - 90.00 = -245.00, and the decline carries the arithmetic as
+  its reason rather than just a status. Added a test that it declines even had Auth-A's hold
+  never been released (-355.00), so the decision is visibly not near its boundary.
+
+  Two mutation gaps found and closed. The non-positive-hold guard survived at first — on a
+  healthy account `Hold::place` catches it anyway; it only earns its place on an overdrawn one,
+  where without it a -90.00 "hold" would be reported as a decline instead of refused. And
+  available balance's value-date filter had nothing testing it, since every fixture had value
+  dates at or before the day asked; added one with a future-dated credit. 327 tests green.
+
+  Settling for less than was held releases the whole hold — Auth-A reserves 200.00, settles
+  185.00, and the 15.00 comes back rather than staying reserved. Standard card behaviour, and
+  no figure in the window depends on it, so it is documented in `Hold` rather than raised to
+  AMBIGUITIES.
