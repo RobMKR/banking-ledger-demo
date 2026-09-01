@@ -75,6 +75,27 @@ final class AssessmentStream
         );
     }
 
+    /**
+     * The same ten events, each emitted twice — the shape a retry or an operator re-run takes.
+     *
+     * The repeats are freshly constructed rather than the same object twice, so a guard that
+     * deduplicated on object identity instead of on the event id would still pass every other
+     * test and fail here.
+     */
+    public static function withDuplicates(): EventStream
+    {
+        $first = self::asListed()->asListed();
+        $again = self::asListed()->asListed();
+
+        $doubled = [];
+        foreach ($first as $i => $event) {
+            $doubled[] = $event;
+            $doubled[] = $again[$i];
+        }
+
+        return new EventStream(...$doubled);
+    }
+
     private static function day(int $n): LedgerDay
     {
         return LedgerDay::of($n);

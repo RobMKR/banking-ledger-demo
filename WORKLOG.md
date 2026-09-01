@@ -149,3 +149,6 @@ mtimes afterwards — the only two edits made after the fact.
   Transcribed the ten events once, into `tests/Support/AssessmentStream`. It moves to the
   Infrastructure event source at step 13 and this delegates — a second transcription is a
   second chance to mistype 620.00.
+- **20:15** — Step 7, duplicate rejection. `ProcessedEvents` (the seen-id set) and
+  `DuplicateEventRule` (the gate that turns it into a `Decision`). Kept apart on purpose: one is
+  a dumb set, the other is domain messaging, and both are testable alone.
