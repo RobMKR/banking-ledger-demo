@@ -57,3 +57,29 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   (rounding belongs at named boundaries only), and every arithmetic path checks `is_int` because
   PHP silently promotes integer overflow to float. Refused PHP_INT_MIN outright since it cannot
   be negated. 60 tests green.
+- **16:56** — Step 3 Rate, Rounding, Allocator. Rate is basis points, not a float: 0.04%/day is
+  exactly 4 bps, so the rational stays integral. Rounding is one function, `divideHalfUp`, using
+  intdiv(2n+d, 2d) — the single named boundary where precision is allowed to be lost, so every
+  rounding decision in the ledger is greppable. Read HALF_UP as away-from-zero (Java/PHP
+  convention) and pinned it with a 2.5 -> 3 case that half-even would fail.
+
+  Added `landsOnATie()` so NUMBERS.md's claim that tie-breaking is not load-bearing here is
+  executable rather than asserted — the test walks every reachable balance and proves none ties.
+  If someone later introduces one, that test fails and the documentation has to change with it.
+
+  **Criterion 7 dies here**, with a test that computes 3 x 3.334 = 10.002, asserts it is not
+  10.000, and shows the largest-remainder split summing exactly. Also a 120-case property test:
+  parts always sum to the original and never differ by more than one minor unit.
+
+  Mutation-checked the new code — truncating instead of rounding fails 18 tests, dropping the
+  allocation residue fails 77, moving the residue to the last part fails 4, doubling the rate
+  fails 12. 224 tests green.
+- **16:59** — Wrote NUMBERS.md. Re-derived every sensitivity figure instead of copying the plan's
+  draft, which paid off twice. First, the plan's "D3 at +5.00" is an end-of-D5 snapshot, not the
+  final balance — stated the snapshot explicitly so the fee-cliff argument is checkable. Second,
+  and better: halving the rate to 0.02% makes 225.00 accrue exactly 0.045, a real tie. So halving
+  does not just shrink the numbers, it moves the rounding mode from inert to decisive — a much
+  stronger "why not half it" than the dust-threshold answer the plan had. Confirmed the fee cliff
+  is strict at 30.00: D3 closes at exactly 0.00 there, which is not negative, so no fourth fee.
+  Marked the claims the suite actually asserts and checked every citation resolves to a real test.
+

@@ -1,8 +1,12 @@
 # In-Memory Account Ledger Core — Implementation Plan
 
-> **Status.** REJECTED.md, AMBIGUITIES.md and WORKLOG.md are written; those files are now
-> authoritative and this plan defers to them where they overlap. Still to build: the kernel
-> itself, the test suite, README, and NUMBERS.md as a file (its content is drafted below).
+> **Status.** REJECTED.md, AMBIGUITIES.md, NUMBERS.md, README.md and WORKLOG.md are written
+> and authoritative; this plan defers to them where they overlap. Commit steps 1–3 are built
+> and green (224 tests). Still to build: steps 4–16 — ledger, holds, events, rules, replay
+> engine, CLI.
+>
+> The NUMBERS.md draft that used to live in this file has been superseded by the real file;
+> its figures were re-derived rather than copied, and two were corrected in the process.
 
 ## Context
 

@@ -107,6 +107,26 @@ final readonly class Money implements \Stringable
         return self::ofMinor($difference, $this->currency);
     }
 
+    /**
+     * Apply a rate, rounding half-up to this currency's precision.
+     *
+     * The rate is an integer rational, so the multiplication is exact and the single
+     * rounding happens in Rounding::divideHalfUp() — the one named boundary where
+     * precision is allowed to be lost.
+     */
+    public function multipliedBy(Rate $rate): self
+    {
+        $product = $this->minor * $rate->numerator();
+        if (!is_int($product)) {
+            throw ArithmeticOverflow::inOperation('multipliedBy');
+        }
+
+        return self::ofMinor(
+            Rounding::divideHalfUp($product, $rate->denominator()),
+            $this->currency,
+        );
+    }
+
     public function negated(): self
     {
         return self::ofMinor(-$this->minor, $this->currency);
