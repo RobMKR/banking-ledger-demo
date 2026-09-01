@@ -134,3 +134,4 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   185.00, and the 15.00 comes back rather than staying reserved. Standard card behaviour, and
   no figure in the window depends on it, so it is documented in `Hold` rather than raised to
   AMBIGUITIES.
+- **17:33** — Took a break! Work will continue after 8:00PM 
