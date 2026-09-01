@@ -171,3 +171,10 @@ mtimes afterwards — the only two edits made after the fact.
   (250.00 / -395.00 / 5.00 / -205.00 / -230.00).
 - **23:25** — Steps 12, 13 and 14: replay engine, CLI, golden test. `php bin/replay` now walks
   the stream end to end and prints ACC-001 390.93 / ACC-002 10.008.
+- **23:30** — Last step: the deliberate failing test, and the docs.
+- **23:49** — Moved the failing-test write-up out of REJECTED.md. The brief scopes that file to
+  "criteria refused with reasons, plus approaches abandoned mid-build", and the failing test is
+  neither — it is a deliverable in its own right. I had duplicated the whole account in both
+  files, near-verbatim.
+- **23:53** — Trimmed the README to what the brief actually asks of it — "how to run the suite and
+  read the output" — and made the three run modes explicit, each with its expected result.

@@ -80,6 +80,13 @@ Two grounds:
 > that is false. Appended compensating entries can restore a balance, and an auto-reversing
 > rule would put D1–D5 back at exactly the pre-E7 figures (AMBIGUITIES §3).
 
+**This refusal has a cost, and it is committed as a failing test.**
+`tests/KnownFailure/FeesOutliveTheirCauseTest.php` asserts that no day ending in the black
+carries a fee, and fails on exactly these three days. Refusing criterion 6 means accepting a
+ledger that holds a charge its own closing balance cannot account for; the test is the receipt,
+and its inline annotation works through both ways out and why each is worse. The README explains
+how to run it.
+
 ## 7 — "The three BHD instalments in E10 must each be BHD 3.334."
 
 **Refused.** 3 × 3.334 = **10.002**, overpaying the 10.000 credit by 0.002.
@@ -98,3 +105,45 @@ It is also incoherent: the capitalized total *is* the sum of the dailies
 (0.10 + 0.09 + 0.25 + 0.17 + 0.16 + 0.16 = **0.93**). There is no remainder to discard.
 
 ---
+# Approaches abandoned mid-build
+
+Not criteria — decisions taken during the build and then reversed. Recorded because a design
+that only shows its final state hides where the thinking actually happened.
+
+**Policy flags for the four unresolved ambiguities.** The plan carried four switches so every
+reading could be executed. Cut, because a configurable engine can pass every combination and
+still demonstrate no position on any of them. One hardcoded path plus a worked counterfactual
+shows both the decision and the understanding behind it. The cost is real and is stated in
+AMBIGUITIES.md: the four alternative finals (390.81 / 466.03 / 210.69 / 441.01) are derived by
+hand and **cannot be produced by this binary**.
+
+**A fixpoint loop with a convergence guard and an iteration cap** for fee assessment. Dropped
+once the proof was written out: a fee books with `value_date` equal to the day whose balance was
+negative, so it can only ever affect days at or after that day. A single ascending pass D1→D6
+*is* the fixpoint. The cap would have been a runtime assert against a loop that cannot occur.
+Replaced by a test that a second pass raises nothing and ten more change no count.
+
+**`AuthorizationRule::authorize()` as a public method that placed the hold.** It reserved funds
+and returned a verdict rather than a `Decision`, so any caller could change an account's
+available balance without producing a log record — a hole through the guarantee the DecisionLog
+exists for. Split into a pure `assess()` (safe to expose precisely because it changes nothing)
+and `apply()` as the only mutator, which cannot reserve without also returning the record.
+
+**`symfony/console` for the CLI.** Planned, then dropped. What it buys here is argument parsing
+for one optional flag, against a runtime dependency in a project whose argument is that the
+arithmetic is the deliverable. `getopt()` is four lines.
+
+**A DI container.** Same test, same answer. A container earns its place when wiring is large,
+conditional, or configured at runtime; this graph is fifteen objects in one arrangement.
+Reflection-driven autowiring would replace a list you can read with a magic you cannot. Kept
+constructor injection throughout and one hand-written composition root.
+
+**Ports in front of everything.** The plan had interfaces for the event source and the
+presenter. Only the presenter kept one, because only the presenter has two implementations
+(console and JSON). An interface with a single implementation is a seam with nothing to pass
+through it — the same reasoning that keeps the rules concrete classes.
+
+**Payload hashing in the duplicate guard**, to tell a benign retry from a same-id-different-payload
+integrity breach. Dropped as scope creep: the stream contains neither case and nothing here would
+act on the distinction. The limitation is real, so it is tested rather than glossed — an event
+reusing an id with a different payload is silently absorbed, and a test says so out loud.

@@ -21,9 +21,16 @@
     },
     "scripts": {
         "test": "phpunit",
-        "test:known-failure": "phpunit --group known-failure"
+        "test:known-failure": "phpunit --group known-failure",
+        "replay": "php bin/replay"
     },
     "config": {
         "sort-packages": true
+    },
+    "scripts-descriptions": {
+        "test": "The full suite. Must be green. Excludes the deliberate failure.",
+        "test:golden": "The golden test alone: the shipped configuration locked end to end.",
+        "test:known-failure": "The one test committed failing, on purpose. Expected to fail.",
+        "replay": "Replay the assessment stream and print the per-day report."
     }
 }

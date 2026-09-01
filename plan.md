@@ -1,12 +1,13 @@
 # In-Memory Account Ledger Core — Implementation Plan
 
 > **Status.** REJECTED.md, AMBIGUITIES.md, NUMBERS.md, README.md and WORKLOG.md are written
-> and authoritative; this plan defers to them where they overlap. Commit steps 1–5 are built
-> and green (467 tests) — money, rounding, allocation, the bitemporal ledger, holds, the
+> and authoritative; this plan defers to them where they overlap. Every commit step is built
+> and green (528 tests) — money, rounding, allocation, the bitemporal ledger, holds, the
 > authorization rule, the event/decision layer, duplicate rejection, settlement, reversal,
-> overdraft fees, interest, the replay engine, the CLI and the golden test. **`php bin/replay`
-> produces ACC-001 390.93 and ACC-002 10.008 end to end, and replaying the stream twice moves
-> no figure.** Still to build: steps 15–16 — the deliberate failing test, docs finalisation.
+> overdraft fees, interest, the replay engine, the CLI, the golden test, the deliberate failing
+> test and the docs. **`php bin/replay` produces ACC-001 390.93 and ACC-002 10.008 end to end,
+> replaying the stream twice moves no figure, and `composer test:known-failure` fails on Days 2,
+> 4 and 5 exactly as designed.** 528 tests green; nothing outstanding.
 >
 > The NUMBERS.md draft that used to live in this file has been superseded by the real file;
 > its figures were re-derived rather than copied, and two were corrected in the process.
