@@ -1,18 +1,5 @@
 # AMBIGUITIES.md
 
-Every ambiguity found in the brief, how it was resolved, and — where the resolution changes
-the numbers — exactly what the rejected reading would have produced.
-
-The kernel ships **one** configuration. There are no policy flags. That is deliberate: an
-engine configurable into any answer demonstrates a position on none of them. The cost is that
-the counterfactual figures below cannot be produced by the binary, so each is worked through
-day by day here and can be checked by hand.
-
-**Shipped result:** ACC-001 closes at **AED 390.93**, ACC-002 at **BHD 10.008**, with three
-overdraft fees totalling AED 75.00.
-
----
-
 # Part 1 — The four load-bearing decisions
 
 ## §1 Does a backdated entry reopen an already-closed day for fee assessment?
@@ -142,6 +129,33 @@ The D5 cell is the tell: as-known accrues 0.00 for D5 because at D5's close the 
 −230.00, yet the final ledger shows D5 at +390.00. The account earns nothing for a day it
 ended up in credit on. That asymmetry is why we restate.
 
+**Confidence here is lower than on the other three decisions.** Restating is right in terms of
+*actual funds*: E7 was an error, it was reversed, and the money belonged to the account the
+whole time — the ledger's knowledge was wrong, not the balance.
+
+But the account really was without those funds from E7's booking on D5 until E9 landed on D6,
+and it was treated as such. Auth-B was declined against the reduced balance. Three overdraft
+fees were charged on it. Paying interest on money the account could not use, and was penalised
+for not having, is not obviously correct.
+
+It also makes our configuration asymmetric:
+
+| | E7's effect after E9 |
+|---|---|
+| Fees (§3) | **stands** — E9 reverses E7 and nothing else |
+| Interest (§4) | **unwound** — recomputed as though E7 never distorted the history |
+
+We undo E7's consequences in one place and let them stand in the other.
+
+The mechanical justification for the split is real: fee entries are booked records and
+append-only makes them permanent, whereas accruals are not entries at all until the D6
+capitalization, so restating them mutates nothing. That separates the two cases in *accounting*
+terms. Whether it separates them in *economic* terms is a different question, and one we have
+not settled.
+
+Recorded as unresolved rather than argued away. A reviewer who prefers as-known on these
+grounds gets **390.81**, and the paragraphs above are why we would not fight hard for 390.93.
+
 ---
 
 # Part 2 — Resolved without a numerical fork
@@ -200,6 +214,13 @@ amounts sum to 10.000, so the instruction cannot be followed literally.
 0.001 residue going to the first instalment. Deterministic and order-stable; residue-last is
 equally defensible and gives the same total. See REJECTED.md, criterion 7.
 
+Residue-last is arguably the better convention, and closer to what real systems do — in an
+amortization schedule the final instalment is the balancing one, absorbing whatever rounding
+drift accumulated ahead of it. That argument does not reach this case: all three instalments
+carry value_date D5, so they land on the same day and net to 10.000 whichever order the
+residue takes. No balance, fee or accrual moves either way. Choosing the convention on its
+merits would need a schedule spread across days, which this brief does not have.
+
 ## §10 Stream ordering
 
 E10 is booked Day 5 but appears in the listing after E9, which is booked Day 6.
@@ -217,22 +238,7 @@ it posts regardless of the −370.00 it creates at D2.
 makes the overdraft cascade possible at all, and a real ledger does post settled debits that
 overdraw an account.
 
-## §12 Reversal guards
-
-The brief specifies one reversal and says nothing about malformed ones.
-
-**Resolved:** reversing an unknown entry, and reversing an entry already reversed, are both
-rejected and recorded in the DecisionLog with reasons. Neither occurs in the given stream;
-both are guarded so that the append-only rule cannot be subverted by a double-credit.
-
-## §13 Zero balances do not accrue
-
-"Positive balances only" — ACC-002 sits at 0.000 for D1–D4. Zero is not positive.
-
-**Resolved:** no accrual on D1–D4. ACC-002 accrues only on D5 and D6 (0.004 each), capitalizing
-0.008 for a final of **BHD 10.008**.
-
-## §14 Criterion 5 names Auth-B, whose "if" never fires
+## §12 Criterion 5 names Auth-B, whose "if" never fires
 
 *"If Auth-B is approved, its hold reduces available balance but not ledger balance."*
 

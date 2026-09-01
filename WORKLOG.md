@@ -38,3 +38,8 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
 - **15:20** — Started logging properly.
 - **15:28** — Commited prepared files into git.
 - **15:35** — Start manual review of [AMBIGUITIES.md](AMBIGUITIES.md) and [REJECTED.md](REJECTED.md) prepared by AI (Claude Opus 5)
+- **15:52** — Not fully sold on restated interest. Right on actual funds, but the account really
+  was without that money from D5 to D6 — Auth-B declined on it, three fees charged on it.
+  Restating interest while letting the fees stand is asymmetric. Noted in AMBIGUITIES §4 as
+  unresolved rather than talked round.
+- **16:03** — Cut AMBIGUITIES §12 (reversal guards) and §13 (zero not positive). Literally AI BS

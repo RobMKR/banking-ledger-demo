@@ -14,7 +14,7 @@ Four criteria are refused:
 
 Criteria 1, 3, 4 and 5 are accepted. Criterion 4 is followed with a caveat about card-network
 behaviour (AMBIGUITIES §2), and criterion 5 is sound but has an antecedent that never fires
-(AMBIGUITIES §14) — neither is refused, so neither is argued here.
+(AMBIGUITIES §12) — neither is refused, so neither is argued here.
 
 ---
 
