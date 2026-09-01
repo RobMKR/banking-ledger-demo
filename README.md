@@ -18,7 +18,7 @@ composer install
 composer test
 ```
 
-**528 tests, expected green.** The one deliberately failing test is excluded from this run, so a
+**541 tests, expected green.** The one deliberately failing test is excluded from this run, so a
 green result means "everything claimed to work, works" rather than "nothing is broken that we
 admit to". Add `--testdox` to read the assertions as sentences:
 
@@ -36,9 +36,10 @@ composer test:golden
 figure the brief asks about — both closing balances, both bitemporal columns for all six days,
 the three fees, every event's outcome, the instalment split, and idempotent replay.
 
-Every one of those numbers was derived by hand *before* any code existed and re-verified
-independently in Python with `Decimal`/`ROUND_HALF_UP`, so it locks a verified answer rather than
-whatever the implementation happened to produce. A failure here means one of two things, and both
+Every one of those numbers existed in `plan.md` before the first line of implementation, and I
+re-derived each of them by hand in Python with `Decimal`/`ROUND_HALF_UP` rather than trusting
+the plan — which is what caught two errors in it. So the test locks an independently verified
+answer rather than whatever the implementation happened to produce. A failure here means one of two things, and both
 are worth being told about: **a bug, or a documented decision silently changed.**
 
 Equivalent, running PHPUnit directly:
@@ -103,8 +104,16 @@ The per-day table carries **two** closing-balance columns, because in a bitempor
 | `Closing (then)` | what the day closed at on the evening it closed |
 | `Closing (final)` | what it closed at once every event had arrived |
 
-Day 2 reads −395.00 and 225.00. Both are correct. Printing only the first hides E9; printing only
-the second hides why three fees were ever charged. `AMBIGUITIES.md` §6 explains the choice.
+Day 2 reads **250.00** and **225.00**, and both are correct: it closed at 250.00 on the evening
+of Day 2, and ends the window 25.00 lighter for a fee it was charged three days later. Printing
+only the first hides E7 and E9 entirely; printing only the second hides what anyone actually saw
+at the time. `AMBIGUITIES.md` §6 explains the choice.
+
+A third figure exists and is deliberately not a column: **−395.00**, which is Day 2 as known at
+the close of Day 5 — after E7's backdated debit and its fee, before E9 reverses them. It is the
+figure the fee assessment acted on, and it is visible in the `Postings` section rather than the
+table, because a third balance column would suggest the set is closed. It is not: there is one
+answer per day you might ask on.
 
 `Fees` is what that day's close *raised* — all three of ACC-001's land on the Day 5 row, because
 that is the evening E7 made them due, even though they carry value dates of Days 2, 4 and 5.

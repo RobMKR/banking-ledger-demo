@@ -70,10 +70,30 @@ final readonly class Hold
         return new self($this->authorization, $this->account, $this->amount, $this->placedOn, $on);
     }
 
-    /** Live: still reserving funds, so still subtracted from available balance. */
+    /** Live *now*: still reserving funds. The question the replay asks as it goes. */
     public function isActive(): bool
     {
         return $this->releasedOn === null;
+    }
+
+    /**
+     * Live *on a given day* — placed by then, and not released before it.
+     *
+     * A different question from isActive(), and the distinction is not decoration: a hold
+     * placed on Day 5 reserves nothing on Day 2, and asking "what was available on Day 2"
+     * while subtracting it would collapse the two time dimensions this ledger exists to keep
+     * apart. That is precisely the mistake balanceAsOf() refuses to let a caller make, and
+     * available balance was making it on the hold side until this existed.
+     *
+     * Day granularity means a hold placed and released on the same day counts as inactive for
+     * that whole day. No query in this replay straddles that case — Auth-A is placed on Day 2
+     * and released on Day 4 — but it is a real limit of modelling time in whole days rather
+     * than an oversight.
+     */
+    public function isActiveOn(LedgerDay $day): bool
+    {
+        return $this->placedOn->isOnOrBefore($day)
+            && ($this->releasedOn === null || $this->releasedOn->isAfter($day));
     }
 
     public function belongsTo(AccountId $account): bool

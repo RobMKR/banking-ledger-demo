@@ -172,31 +172,57 @@ final class LedgerKernelTest extends TestCase
         $atFour = $shipped->replay(Scenario::stream());
         $atTwo = $halved->replay(Scenario::stream());
 
-        // First: the rate reaches the arithmetic at all. Without this the rest of the test
-        // would pass against a kernel that quietly ignored its own argument.
+        // First: the rate reaches the arithmetic at all. Without this the rest would pass
+        // against a kernel that quietly ignored its own argument — it did, once.
         self::assertSame('0.93', $atFour->interestFor(self::acc())->format());
         self::assertSame('0.47', $atTwo->interestFor(self::acc())->format());
         self::assertSame('390.93', $atFour->closingBalanceFor(self::acc())->format());
         self::assertSame('390.47', $atTwo->closingBalanceFor(self::acc())->format());
 
-        // Then the point: halving does not merely shrink the accruals.
-        // The balances they are computed on are identical in both runs.
-        $balances = [25000, 22500, 62500, 41500, 39000, 39000];
+        // Now the actual claim. The accrual bases are read out of the ledger rather than
+        // written down here: a hand-maintained list would keep passing after a change moved
+        // the balances, which is exactly the failure this test is supposed to notice.
+        $bases = $this->accrualBases($shipped);
+        self::assertSame([25000, 22500, 62500, 41500, 39000, 39000], $bases, 'the six closing balances, in minor units');
 
-        $tiesAtFour = array_filter($balances, static fn (int $b): bool => Rounding::landsOnATie($b * 4, 10_000));
-        $tiesAtTwo = array_filter($balances, static fn (int $b): bool => Rounding::landsOnATie($b * 2, 10_000));
+        $tiesAtFour = array_values(array_filter($bases, static fn (int $b): bool => Rounding::landsOnATie($b * 4, 10_000)));
+        $tiesAtTwo = array_values(array_filter($bases, static fn (int $b): bool => Rounding::landsOnATie($b * 2, 10_000)));
 
         self::assertSame([], $tiesAtFour, 'at 0.04% no accrual lands on a half — the mode is inert');
-        self::assertSame(
-            [22500, 62500],
-            array_values($tiesAtTwo),
-            'at 0.02% two of them do: 0.045 and 0.125',
-        );
+        self::assertSame([22500, 62500], $tiesAtTwo, 'at 0.02% two do: 0.045 and 0.125');
+    }
 
-        // And the proof it matters: half of 0.93 is 0.465, but the halved run yields 0.47.
-        // The two ties break upward under HALF_UP, so the rounding mode is doing real work at
-        // 0.02% and none at 0.04%.
-        self::assertNotSame('0.465', $atTwo->interestFor(self::acc())->format());
+    /**
+     * The closing balances each day's accrual is computed on, taken from the ledger.
+     *
+     * Not the same thing as a literal array with a comment claiming these are the reachable
+     * balances. NUMBERS.md's HALF_UP argument rests on none of them tying at 0.04%; if a future
+     * change introduces one, this reads the new value and the tie assertions fail — which a
+     * hardcoded list could never do.
+     *
+     * @return list<int>
+     */
+    private function accrualBases(LedgerKernel $kernel): array
+    {
+        $interest = $kernel->ledger->entriesOfType(self::acc(), EntryType::INTEREST);
+        $bases = [];
+
+        foreach ([1, 2, 3, 4, 5, 6] as $day) {
+            $balance = $kernel->ledger->balanceAsOf(self::acc(), LedgerDay::of($day), LedgerDay::of(6));
+
+            // The credit is value-dated Day 6, so it only inflates Day 6 — subtract it there
+            // and nowhere else. Accruals are computed before capitalization, which is what
+            // keeps Day 6 from earning interest on its own interest (AMBIGUITIES.md §8).
+            foreach ($interest as $entry) {
+                if ($entry->valueDate->isOnOrBefore(LedgerDay::of($day))) {
+                    $balance = $balance->minus($entry->amount);
+                }
+            }
+
+            $bases[] = $balance->minor;
+        }
+
+        return $bases;
     }
 
     public function testTheTwoConstantsAreTheOnlyThingWithLetsYouChange(): void

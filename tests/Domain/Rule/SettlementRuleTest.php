@@ -233,8 +233,8 @@ final class SettlementRuleTest extends TestCase
     public function testTheOrphanRejectionNamesTheAuthorizationAndTheAccount(): void
     {
         self::assertSame(
-            'No authorization "Auth-Z" was ever issued on ACC-001. Nothing is posted and the '
-            . 'funds stay in the account.',
+            'Authorization "Auth-Z" holds no funds on ACC-001 — it was never approved. Nothing '
+            . 'is posted and the funds stay in the account.',
             $this->rule->apply($this->settlement('E6', 'Auth-Z', '180.00'))->reason,
         );
     }
@@ -258,6 +258,11 @@ final class SettlementRuleTest extends TestCase
         $decision = $this->rule->apply($this->settlement('E11', 'Auth-B', '90.00', day: 5));
 
         self::assertSame(EventOutcome::REJECTED_ORPHAN_SETTLEMENT, $decision->outcome);
+
+        // The reason has to survive this case too. "Never issued" would be false — Auth-B was
+        // issued and declined — and a log that states a falsehood is worse than a terse one.
+        self::assertStringNotContainsString('never issued', $decision->reason);
+        self::assertStringContainsString('never approved', $decision->reason);
     }
 
     // ==================================================== states the stream never reaches

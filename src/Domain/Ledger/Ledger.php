@@ -16,8 +16,13 @@ use Ledger\Domain\Money\Money;
  *
  * The ledger is bitemporal. Every entry carries the day the money belongs to and the day the
  * ledger learned of it, and balanceAsOf() takes both. "Day 2's closing balance" is not one
- * number: it is −370.00 as known at the close of Day 5, and 250.00 once E9 arrives on Day 6.
- * Both are correct; they answer different questions.
+ * number: with only the stream's own entries it is 250.00 as known at the close of Day 2,
+ * −370.00 once E7 lands on Day 5, and 250.00 again once E9 reverses it on Day 6. All three are
+ * correct; they answer different questions.
+ *
+ * Those are this class's figures — entries in, balances out. The assembled engine adds three
+ * overdraft fees on Day 5, so the same three questions there answer 250.00 / −395.00 / 225.00.
+ * The Ledger does not know about fees, and the docblock says which layer it is quoting.
  */
 final class Ledger
 {

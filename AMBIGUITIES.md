@@ -182,19 +182,27 @@ provably has more than one correct value:
 | end of D5, post-fee | no | yes | −395.00 |
 | end of D6 | yes | yes | +225.00 |
 
-**Resolved: print both dimensions.** `DailyReport` carries the balance as known at that day's
+**Resolved: print both dimensions.** `DailyLine` carries the balance as known at that day's
 own close *and* as restated against final knowledge, and the presenter prints both columns.
 Collapsing to either alone would conceal the exact behaviour E7 and E9 exist to expose.
 
-## §7 Restated accruals must also restate the printed output
+## §7 Would a printed accrual series have to be the restated one?
 
-Under §4's resolution, the accrual printed at D2's close (0.10, against 250.00) is superseded
-by the restated 0.09 (against 225.00). If the report printed the original series, the printed
-dailies would not sum to the capitalized 0.93 — the non-negotiable would hold internally but
-be violated on the face of the output, which is the artefact being read.
+Under §4's resolution, the accrual for D2 computed at its close (0.10, against 250.00) is
+superseded by the restated 0.09 (against 225.00). If a report printed the original series, the
+printed dailies would not sum to the capitalized 0.93 — the non-negotiable would hold internally
+but be violated on the face of the artefact being read.
 
-**Resolved:** the final report reprints the restated accrual series. The per-day figures a
-reader adds up are the ones that produce the capitalized credit.
+**Resolved: the question does not arise, because no per-day accrual is printed.** The report
+carries one capitalized figure per account and no daily series, so there is nothing on the page
+for a reader to add up and find short. Were a series ever added it would have to be the restated
+one, for exactly the reason above.
+
+What *is* enforced is the tighter version of the same worry: the figure the report prints must be
+the figure the ledger holds. It is read back from the posted `INTEREST` entry rather than
+recomputed, because recomputing it after capitalization reads a final-day balance that now
+includes the credit — which is a real bug this build shipped and then fixed
+(`ReplayEngineTest::testTheInterestReportedIsTheInterestPosted`).
 
 ## §8 Interest circularity on Day 6
 
@@ -263,7 +271,8 @@ has already pushed the account to −155.00 by the time E8 is evaluated.
 **Resolved: it makes no difference, so we do not rewrite the brief.** The rule is implemented and
 demonstrated on Auth-A, where the antecedent genuinely holds; Auth-B is declined and the decline
 is logged with its −155.00 available balance. The criterion is accepted under either reading —
-see REJECTED.md §5.
+REJECTED.md is scoped to refusals, so it carries no section for an accepted criterion —
+the reasoning for accepting 5 lives here.
 
 ---
 

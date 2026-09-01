@@ -20,11 +20,12 @@ use Ledger\Domain\Rule\ReversalRule;
 /**
  * The stream replayed day by day, with the daily close running as each day ends.
  *
- * A stand-in for the replay engine, which does not exist yet. It exists so the fee cascade and
- * the interest schedule can be tested against the real six-day sequence rather than against a
- * hand-placed ledger — the cascade only appears if the days close in order.
+ * A narrower stand-in for the replay engine: it closes days in order and applies fees, but
+ * capitalizes no interest and processes no authorizations. That is deliberate — the fee
+ * cascade only appears if days close in order, and these tests want that sequence without the
+ * rest of the engine's behaviour in the way.
  *
- * When the engine arrives it takes this over and the golden test pins both to the same figures.
+ * The engine exists, and the golden test pins both to the same figures.
  * The events that post nothing are absent by design: E3 and E8 are authorizations, E6 is the
  * rejected orphan.
  */

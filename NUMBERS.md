@@ -46,10 +46,15 @@ Roughly 14.6% simple annual. Two things depend on the magnitude.
 
 | Rate | Dust threshold (AED) | Interest total | Any balance tie? |
 |---|---|---|---|
-| 0.01% (quarter) | 50.00 | 0.23 | ties at 250.00, 650.00 |
+| 0.01% (quarter) | 50.00 | 0.23 | ties at 250.00 |
 | 0.02% (half) | 25.00 | 0.47 | **ties at 225.00, 625.00** |
 | **0.04%** | **12.50** | **0.93** | **none** |
 | 0.08% (double) | 6.25 | 1.83 | none |
+
+The ties column reads the *restated* closing balances — 250.00 / 225.00 / 625.00 / 415.00 /
+390.00 / 390.00 — because those are the bases the shipped configuration accrues on (§4). The
+as-known series would tie differently; mixing the two is how an earlier draft of this table
+claimed a tie at 650.00, which is not an accrual base at all.
 
 **Halving the rate makes the rounding mode load-bearing.** At 0.02%, D2's balance of 225.00
 accrues exactly 0.045 — a true tie. HALF_UP gives 0.05; HALF_DOWN and HALF_EVEN both give 0.04,

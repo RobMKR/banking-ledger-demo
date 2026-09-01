@@ -86,8 +86,9 @@ final class AssessmentReplayTest extends TestCase
      * Two columns, because "Day 2's closing balance" is not one number.
      *
      * "as known then" is what the day closed at on the evening it closed; "restated" is what it
-     * closed at once E9 had arrived. Day 2 is the pair that makes the point: -395.00 and 225.00,
-     * both correct, answering different questions.
+     * closed at once E9 had arrived. Day 2 is the pair that makes the point: 250.00 and 225.00,
+     * both correct, answering different questions — it closed in the black and ends the window
+     * 25.00 lighter for a fee assessed three days after it closed.
      *
      * @return iterable<string, array{int, string, string}>
      */

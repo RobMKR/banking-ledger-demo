@@ -60,21 +60,30 @@ final class HoldRegistry
             ?? throw UnknownAuthorization::named($authorization);
     }
 
-    /** @return list<Hold> */
-    public function activeFor(AccountId $account): array
+    /**
+     * Holds live on an account, optionally as of a given day.
+     *
+     * Without $on this is "live now", which is what the replay asks as it walks forward. With
+     * it, the question becomes bitemporal and a hold placed later does not count — see
+     * Hold::isActiveOn().
+     *
+     * @return list<Hold>
+     */
+    public function activeFor(AccountId $account, ?LedgerDay $on = null): array
     {
         return array_values(array_filter(
             $this->holds,
-            static fn (Hold $hold): bool => $hold->isActive() && $hold->belongsTo($account),
+            static fn (Hold $hold): bool => $hold->belongsTo($account)
+                && ($on === null ? $hold->isActive() : $hold->isActiveOn($on)),
         ));
     }
 
-    /** The sum of everything currently reserved on an account. Zero when nothing is held. */
-    public function totalHeldFor(Account $account): Money
+    /** The sum of everything reserved on an account, now or as of $on. Zero when nothing is. */
+    public function totalHeldFor(Account $account, ?LedgerDay $on = null): Money
     {
         $total = Money::zero($account->currency);
 
-        foreach ($this->activeFor($account->id) as $hold) {
+        foreach ($this->activeFor($account->id, $on) as $hold) {
             $total = $total->plus($hold->amount);
         }
 

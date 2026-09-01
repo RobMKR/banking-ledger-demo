@@ -30,14 +30,20 @@ use Ledger\Domain\Ledger\LedgerEntry;
  *
  * Two smaller decisions, neither exercised by the stream:
  *
+ * The rejection is worded against the hold registry, which is all this rule can see: it
+ * knows nothing is reserved, not why. "Never issued" would be a lie for a settlement of a
+ * *declined* authorization — Auth-B was issued and refused. A DecisionLog whose whole claim
+ * is to be a complete and accurate account cannot afford a reason string that is false.
+ *
  *  - **A settlement closes the whole hold even when it settles for less.** Auth-A reserves
  *    200.00 and settles 185.00; the remaining 15.00 comes back rather than staying reserved.
  *  - **Settling for more than was held is allowed.** The hold is an estimate and the settled
  *    figure is what the network guarantees, so the entry follows the event, not the hold.
  *
  * Account existence and currency are not checked here. They are cross-cutting preconditions
- * that apply to every event type, and repeating them in five rules is how one gets missed;
- * they belong to a single pass in front of the dispatcher when the replay engine exists.
+ * that apply to every event type, and repeating them in five rules is how one gets missed.
+ * ReplayEngine does them once in front of the dispatcher: an unknown account is refused
+ * there, and any domain exception a rule throws is caught and logged as a rejection.
  */
 final readonly class SettlementRule
 {
@@ -51,8 +57,8 @@ final readonly class SettlementRule
     {
         if (!$this->holds->has($event->authorization)) {
             return $this->reject($event, EventOutcome::REJECTED_ORPHAN_SETTLEMENT, sprintf(
-                'No authorization "%s" was ever issued on %s. Nothing is posted and the funds '
-                . 'stay in the account.',
+                'Authorization "%s" holds no funds on %s — it was never approved. Nothing is '
+                . 'posted and the funds stay in the account.',
                 $event->authorization->value,
                 $event->account->value,
             ));

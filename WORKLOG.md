@@ -178,3 +178,9 @@ mtimes afterwards — the only two edits made after the fact.
   files, near-verbatim.
 - **23:53** — Trimmed the README to what the brief actually asks of it — "how to run the suite and
   read the output" — and made the three run modes explicit, each with its expected result.
+
+## 2026-09-02
+
+- **00:26** — Acted on a cold external review — a reviewer given the brief and the repo and no
+  other context. It found things I had missed, and I verified every one before fixing rather than
+  taking its word.

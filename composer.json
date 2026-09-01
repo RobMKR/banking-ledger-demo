@@ -21,6 +21,7 @@
     },
     "scripts": {
         "test": "phpunit",
+        "test:golden": "phpunit tests/Golden --testdox",
         "test:known-failure": "phpunit --group known-failure",
         "replay": "php bin/replay"
     },

@@ -85,8 +85,6 @@ final readonly class LedgerKernel
         $log = new DecisionLog();
         $processed = new ProcessedEvents();
 
-        $schedule = new InterestSchedule($ledger, $interestRate);
-
         $engine = new ReplayEngine(
             $ledger,
             $log,
@@ -99,8 +97,7 @@ final readonly class LedgerKernel
                 new ReversalRule($ledger),
             ),
             new DailyClose($ledger, new OverdraftFeeRule($ledger, $overdraftFee), $overdraftFee),
-            $schedule,
-            new InterestAccrualRule($ledger, $schedule),
+            new InterestAccrualRule($ledger, new InterestSchedule($ledger, $interestRate)),
         );
 
         return new self($ledger, $holds, $log, $processed, $engine);

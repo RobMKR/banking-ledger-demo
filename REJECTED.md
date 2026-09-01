@@ -94,7 +94,7 @@ how to run it.
 BHD has 3 decimals and 10.000 / 3 = 3.333…, so *no* three equal amounts sum to 10.000. The
 criterion resolves that impossibility by rounding all three up, and breaks the total.
 
-Used instead: **3.334 + 3.333 + 3.333 = 10.000**, exact, by largest remainder.
+Used instead: **3.334 + 3.333 + 3.333 = 10.000**, exact, by largest remainder over equal parts.
 
 ## 8 — "If the rounded daily accruals do not sum to the capitalized total, discard the remainder."
 

@@ -11,10 +11,13 @@ use Ledger\Domain\Event\EventStream;
 use Ledger\Domain\Event\Exception\EventException;
 use Ledger\Domain\Event\LedgerEvent;
 use Ledger\Domain\Ledger\Exception\LedgerException;
+use Ledger\Domain\Ledger\Account;
+use Ledger\Domain\Ledger\EntryType;
 use Ledger\Domain\Ledger\Ledger;
 use Ledger\Domain\Ledger\LedgerDay;
 use Ledger\Domain\Ledger\LedgerEntry;
 use Ledger\Domain\Money\Exception\MoneyException;
+use Ledger\Domain\Money\Money;
 use Ledger\Domain\Rule\DuplicateEventRule;
 use Ledger\Domain\Rule\InterestAccrualRule;
 use Ledger\Domain\Rule\RuleSet;
@@ -53,7 +56,6 @@ final class ReplayEngine
         private readonly DuplicateEventRule $duplicates,
         private readonly RuleSet $rules,
         private readonly DailyClose $dailyClose,
-        private readonly InterestSchedule $interestSchedule,
         private readonly InterestAccrualRule $interest,
     ) {
     }
@@ -132,6 +134,20 @@ final class ReplayEngine
         }
     }
 
+    /**
+     * The interest actually written to the ledger — read back, never recomputed
+     */
+    private function postedInterestFor(Account $account): Money
+    {
+        $total = Money::zero($account->currency);
+
+        foreach ($this->ledger->entriesOfType($account->id, EntryType::INTEREST) as $entry) {
+            $total = $total->plus($entry->amount);
+        }
+
+        return $total;
+    }
+
     /** @param array<int, list<LedgerEntry>> $feesByDay */
     private function report(LedgerDay $finalDay, array $feesByDay): ReplayReport
     {
@@ -162,7 +178,7 @@ final class ReplayEngine
             }
 
             $closing[$account->id->value] = $this->ledger->balanceAsOf($account->id, $finalDay, $finalDay);
-            $interest[$account->id->value] = $this->interestSchedule->totalFor($account->id, $finalDay);
+            $interest[$account->id->value] = $this->postedInterestFor($account);
         }
 
         return new ReplayReport($finalDay, $lines, $closing, $interest);

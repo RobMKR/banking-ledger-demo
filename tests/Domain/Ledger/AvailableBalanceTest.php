@@ -193,6 +193,42 @@ final class AvailableBalanceTest extends TestCase
         $this->assertAvailable('1080.00', 6);   // both count
     }
 
+    /**
+     * The hold side of the same question, which this test used to be named for and never
+     * exercised — it placed no holds at all, so the untested half was the half that was wrong.
+     *
+     * A hold placed on Day 5 reserves nothing on Day 2. Subtracting it anyway would take a
+     * day-scoped balance and reduce it by an unscoped total, which is the dimension-collapsing
+     * mistake the whole design refuses on the entry side.
+     */
+    public function testAHoldPlacedLaterDoesNotReduceAnEarlierDay(): void
+    {
+        $this->credit('1200.00', 1, 1);
+        $this->hold('Auth-B', '200.00', 5);
+
+        $this->assertAvailable('1200.00', 2);
+        $this->assertAvailable('1200.00', 4);
+        $this->assertAvailable('1000.00', 5);
+        $this->assertAvailable('1000.00', 6);
+    }
+
+    /**
+     * And a released hold stops counting from the day it was released, not retroactively. On
+     * Day 3 the 200.00 was genuinely reserved; asking about Day 3 has to say so, even after
+     * Day 4 has given it back.
+     */
+    public function testAReleasedHoldStillCountsOnTheDaysItWasLive(): void
+    {
+        $this->credit('1200.00', 1, 1);
+        $this->hold('Auth-A', '200.00', 2);
+        $this->holds->release(AuthorizationId::of('Auth-A'), self::day(4));
+
+        $this->assertAvailable('1200.00', 1);   // placed on Day 2 — not yet
+        $this->assertAvailable('1000.00', 2);
+        $this->assertAvailable('1000.00', 3);
+        $this->assertAvailable('1200.00', 4);     // released
+    }
+
     /** Nothing clamps available balance at zero. Auth-B is declined against -155.00. */
     public function testCanBeNegative(): void
     {

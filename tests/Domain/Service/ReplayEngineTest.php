@@ -12,6 +12,7 @@ use Ledger\Domain\Event\EventOutcome;
 use Ledger\Domain\Event\EventStream;
 use Ledger\Domain\Event\ReversalEvent;
 use Ledger\Domain\Ledger\AccountId;
+use Ledger\Domain\Ledger\EntryType;
 use Ledger\Domain\Ledger\Ledger;
 use Ledger\Domain\Ledger\LedgerDay;
 use Ledger\Domain\Money\Currency;
@@ -20,6 +21,7 @@ use Ledger\Application\LedgerKernel;
 use Ledger\Domain\Service\ReplayEngine;
 use Ledger\Infrastructure\EventSource\AssessmentScenarioSource;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReplayEngine::class)]
@@ -111,6 +113,82 @@ final class ReplayEngineTest extends TestCase
         foreach ($this->log->all() as $decision) {
             self::assertNotSame('', $decision->reason, 'and each one explains itself');
         }
+    }
+
+    // ==================================================== the report is a view, not a recount
+
+    /**
+     * The interest the report prints must be the interest the ledger holds.
+     *
+     * This is the assertion that was missing, and its absence hid a real bug: the report used to
+     * recompute the total from InterestSchedule *after* capitalization had already appended the
+     * credit, so it re-read a final-day balance that now included it. A credit of 37.49 posted
+     * 0.01 and reported 0.02 — a closing balance of 37.50 alongside components summing to 37.51,
+     * and the brief's "dailies must sum exactly to the capitalized total" broken on the face of
+     * the output.
+     *
+     * The old test asserted that InterestSchedule's total equalled the sum of its own accruals,
+     * which is how it is implemented — X == X, unfalsifiable. This compares two independently
+     * produced numbers instead.
+     *
+     * The amounts are chosen so the pre- and post-capitalization balances round differently:
+     * 37.49 x 0.04% = 0.014996 -> 0.01, but 37.50 x 0.04% = 0.015 -> 0.02 under HALF_UP.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function amountsWhereCapitalizationCouldShiftTheRounding(): iterable
+    {
+        yield 'the original failing case' => ['37.49'];
+        yield 'just under a tie'          => ['12.49'];
+        yield 'just over a tie'           => ['12.51'];
+        yield 'a round figure'            => ['1200.00'];
+        yield 'earns nothing at all'      => ['1.00'];
+    }
+
+    #[DataProvider('amountsWhereCapitalizationCouldShiftTheRounding')]
+    public function testTheInterestReportedIsTheInterestPosted(string $amount): void
+    {
+        $report = $this->engine->replay(new EventStream(
+            self::credit('E1', AssessmentScenarioSource::ACC1, $amount, Currency::AED),
+        ));
+
+        $account = AccountId::of(AssessmentScenarioSource::ACC1);
+        $posted = Money::zero(Currency::AED);
+        foreach ($this->ledger->entriesOfType($account, EntryType::INTEREST) as $entry) {
+            $posted = $posted->plus($entry->amount);
+        }
+
+        self::assertSame(
+            $posted->format(),
+            $report->interestFor($account)->format(),
+            'the report must print what the ledger holds, not a second computation of it',
+        );
+    }
+
+    /**
+     * And the arithmetic the report prints has to close: opening plus every entry equals the
+     * closing balance it states. A report whose own components do not sum to its own total is
+     * wrong however defensible each figure is in isolation.
+     */
+    #[DataProvider('amountsWhereCapitalizationCouldShiftTheRounding')]
+    public function testTheReportedClosingBalanceIsTheSumOfTheLedgerEntries(string $amount): void
+    {
+        $report = $this->engine->replay(new EventStream(
+            self::credit('E1', AssessmentScenarioSource::ACC1, $amount, Currency::AED),
+        ));
+
+        $account = AccountId::of(AssessmentScenarioSource::ACC1);
+        $sum = Money::zero(Currency::AED);
+        foreach ($this->ledger->entriesFor($account) as $entry) {
+            $sum = $sum->plus($entry->amount);
+        }
+
+        self::assertSame($sum->format(), $report->closingBalanceFor($account)->format());
+        self::assertSame(
+            $sum->format(),
+            Money::of($amount, Currency::AED)->plus($report->interestFor($account))->format(),
+            'credit + interest must equal the closing balance printed',
+        );
     }
 
     // ==================================================== the shape of a day

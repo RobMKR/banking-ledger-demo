@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Ledger\Tests\Domain\Service;
 
+use Ledger\Application\LedgerKernel;
 use Ledger\Domain\Ledger\Account;
 use Ledger\Domain\Ledger\AccountId;
+use Ledger\Domain\Ledger\EntryType;
 use Ledger\Domain\Ledger\Ledger;
 use Ledger\Domain\Ledger\LedgerDay;
 use Ledger\Domain\Ledger\LedgerEntry;
@@ -13,6 +15,7 @@ use Ledger\Domain\Money\Currency;
 use Ledger\Domain\Money\Money;
 use Ledger\Domain\Money\Rate;
 use Ledger\Domain\Service\InterestSchedule;
+use Ledger\Infrastructure\EventSource\AssessmentScenarioSource;
 use Ledger\Tests\Support\AssessmentLedger;
 use Ledger\Tests\Support\AssessmentStream;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -98,41 +101,69 @@ final class InterestScheduleTest extends TestCase
      * rounded dailies. Round each day, then add. There is no separately-computed total for a
      * remainder to fall out of, so nothing is ever left over to discard.
      */
-    public function testCriterionEightTheDailiesSumExactlyToTheCapitalizedTotalByConstruction(): void
+    public function testCriterionEightTheDailiesSumExactlyToTheCapitalizedTotal(): void
     {
         $schedule = self::scheduleOverTheWindow();
 
-        foreach ([AssessmentStream::ACC1, AssessmentStream::ACC2] as $id) {
-            $account = self::acc($id);
-            $summed = Money::zero($id === AssessmentStream::ACC1 ? Currency::AED : Currency::BHD);
+        // Asserted against figures derived by hand, not against the schedule's own sum. An
+        // earlier version of this test compared totalFor() with the sum of accrualsFor() —
+        // which is how totalFor() is implemented, so it asserted X == X and would have passed
+        // against any accrual arithmetic at all, correct or not.
+        self::assertSame(
+            ['0.10', '0.09', '0.25', '0.17', '0.16', '0.16'],
+            self::formatted($schedule->accrualsFor(self::acc(), self::d(6))),
+        );
+        self::assertSame('0.93', $schedule->totalFor(self::acc(), self::d(6))->format());
 
-            foreach ($schedule->accrualsFor($account, self::d(6)) as $accrual) {
-                $summed = $summed->plus($accrual);
-            }
-
-            self::assertTrue(
-                $summed->equals($schedule->totalFor($account, self::d(6))),
-                sprintf('%s: dailies must sum to the capitalized total exactly', $id),
-            );
-        }
+        // 0.10 + 0.09 + 0.25 + 0.17 + 0.16 + 0.16 = 0.93, by hand.
+        self::assertSame('0.93', Money::of('0.10', Currency::AED)
+            ->plus(Money::of('0.09', Currency::AED))->plus(Money::of('0.25', Currency::AED))
+            ->plus(Money::of('0.17', Currency::AED))->plus(Money::of('0.16', Currency::AED))
+            ->plus(Money::of('0.16', Currency::AED))->format());
     }
 
     /**
-     * The same property against a rate chosen to make every day round, so the claim is not
-     * passing by luck on figures that happen to be exact. At 7 bps the dailies are
-     * 0.175 / 0.1575 / 0.4375 / 0.2905 / 0.273 / 0.273 before rounding — not one is clean.
+     * The same property at a rate chosen so every single day rounds, so the claim cannot be
+     * passing on figures that happen to be exact. At 7 bps the raw dailies are
+     * 0.175 / 0.1575 / 0.4375 / 0.2905 / 0.273 / 0.273 — not one is clean at two places.
+     *
+     * Expected values written out longhand from those raw figures under HALF_UP, so the test
+     * has an opinion of its own rather than echoing the implementation.
      */
     public function testTheSumPropertyHoldsAtARateWhereEveryDayRounds(): void
     {
-        $ledger = AssessmentLedger::throughDay(6)->ledger;
-        $schedule = new InterestSchedule($ledger, self::rate(7));
+        $schedule = new InterestSchedule(AssessmentLedger::throughDay(6)->ledger, self::rate(7));
 
-        $summed = Money::zero(Currency::AED);
-        foreach ($schedule->accrualsFor(self::acc(), self::d(6)) as $accrual) {
-            $summed = $summed->plus($accrual);
+        //          0.175 -> 0.18   0.1575 -> 0.16   0.4375 -> 0.44
+        //          0.2905 -> 0.29  0.273 -> 0.27    0.273 -> 0.27      sum: 1.61
+        self::assertSame(
+            ['0.18', '0.16', '0.44', '0.29', '0.27', '0.27'],
+            self::formatted($schedule->accrualsFor(self::acc(), self::d(6))),
+        );
+        self::assertSame('1.61', $schedule->totalFor(self::acc(), self::d(6))->format());
+    }
+
+    /**
+     * The other half of criterion 8's refutation, and the half that was missing: whatever the
+     * schedule computes has to be what the ledger ends up holding. A total that is internally
+     * consistent but disagrees with the posted credit breaks the non-negotiable exactly where
+     * it matters — on the artefact someone reads.
+     */
+    public function testTheCapitalizedCreditIsTheSumOfTheDailies(): void
+    {
+        $kernel = LedgerKernel::build(...AssessmentScenarioSource::accounts());
+        $report = $kernel->replay(AssessmentScenarioSource::stream());
+
+        foreach (AssessmentScenarioSource::accounts() as $account) {
+            $posted = $kernel->ledger->entriesOfType($account->id, EntryType::INTEREST);
+
+            self::assertCount(1, $posted, $account->id->value . ': one credit, not six');
+            self::assertSame(
+                $posted[0]->amount->format(),
+                $report->interestFor($account->id)->format(),
+                $account->id->value . ': the posted credit and the reported total must agree',
+            );
         }
-
-        self::assertTrue($summed->equals($schedule->totalFor(self::acc(), self::d(6))));
     }
 
     // ==================================================== "positive balances only"
