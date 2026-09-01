@@ -1,0 +1,37 @@
+# WORKLOG
+
+Append-only — nothing edited after the fact. Times local (+04).
+Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
+
+## 2026-09-01
+
+- **13:51** — Copied the brief into the repo as `assessment_plain.md`.
+- **~13:55** — Re-derived every figure in the plan from scratch instead of trusting it.
+  All match. Arithmetic is sound; the problems are in the reasoning.
+- **~14:00** — Plan quotes available at E8 as −335.00. That's the force-post number; should
+  be −155.00. Auth-B declines either way.
+- **~14:05** — Review done. Five issues:
+  - criterion 5 wrongly refused — it's a conditional, a false "if" isn't a false claim
+  - criterion 6 refused with "append-only forbids it", which our own auto-reverse disproves
+  - retroactive fee assessment (75.00 vs 25.00) assumed silently, while smaller calls got flags
+  - fixpoint loop + iteration cap guarding a loop that can't happen
+  - NUMBERS.md justifies constants the brief gave, not the ones we picked
+
+  Created this file here, then didn't use it for an hour.
+- **~14:10–14:24** — Fixed all five.
+- **~14:20** — Renumbered criterion refs against a stale copy of the brief. Reverted, 12 edits
+  wasted. Re-read the file first next time.
+- **~14:24** — Cut the four policy flags. One hardcoded path; alternatives become worked
+  counterfactuals. Cost: those four finals can't be run any more, so they're labelled derived,
+  not tested.
+- **~14:27** — First drafts of REJECTED.md and AMBIGUITIES.md. Numbers generated from the
+  verification script rather than retyped.
+- **~14:40** — REJECTED.md was 237 lines and unreadable. Cut to 139.
+- **~14:53** — AMBIGUITIES §14: criterion 5 names Auth-B but the "if" never fires. Possibly a
+  typo for Auth-A — "Auth-B is never settled" only carries meaning if the author expected it
+  approved.
+- **~15:00** — Criterion 2 has two readings and I'd only covered one. Under "D2 gets exactly
+  one fee" the claim is actually true in our config. Rewrote to handle both. Weakest spot in
+  the doc.
+- **~15:16** — Trimmed REJECTED.md to refusals only; 4 and 5 belong in AMBIGUITIES.
+- **15:20** — Started logging properly.
