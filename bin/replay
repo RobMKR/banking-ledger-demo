@@ -1,0 +1,42 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Ledger\Application\LedgerKernel;
+use Ledger\Infrastructure\EventSource\AssessmentScenarioSource;
+use Ledger\Infrastructure\Presenter\ConsoleTablePresenter;
+use Ledger\Infrastructure\Presenter\JsonPresenter;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$options = getopt('', ['format::', 'duplicates', 'help']);
+
+if (isset($options['help'])) {
+    echo <<<TXT
+    Usage: php bin/replay [--format=table|json] [--duplicates]
+
+      --format=table   per-day table (default)
+      --format=json    machine-readable, what the golden test asserts against
+      --duplicates     emit every event twice; the report must be identical
+
+    TXT;
+    exit(0);
+}
+
+$format = $options['format'] ?? 'table';
+
+if (!in_array($format, ['table', 'json'], true)) {
+    fwrite(STDERR, "Unknown format \"{$format}\". Expected table or json.\n");
+    exit(1);
+}
+
+$kernel = LedgerKernel::build(...AssessmentScenarioSource::accounts());
+
+$report = $kernel->replay(
+    isset($options['duplicates'])
+        ? AssessmentScenarioSource::streamWithDuplicates()
+        : AssessmentScenarioSource::stream(),
+);
+
+echo ($format === 'json' ? new JsonPresenter() : new ConsoleTablePresenter())->present($report), "\n";

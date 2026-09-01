@@ -34,13 +34,11 @@ use Ledger\Domain\Money\Money;
  */
 final readonly class AuthorizationRule
 {
-    private AvailableBalance $available;
-
     public function __construct(
         private Ledger $ledger,
         private HoldRegistry $holds,
+        private AvailableBalance $available,
     ) {
-        $this->available = new AvailableBalance($ledger, $holds);
     }
 
     /**

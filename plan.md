@@ -4,9 +4,9 @@
 > and authoritative; this plan defers to them where they overlap. Commit steps 1–5 are built
 > and green (467 tests) — money, rounding, allocation, the bitemporal ledger, holds, the
 > authorization rule, the event/decision layer, duplicate rejection, settlement, reversal,
-> overdraft fees and interest. **Both closing figures are now produced by the code: ACC-001
-> 390.93, ACC-002 10.008.** Still to build: steps 12–16 — replay engine, CLI, golden test,
-> the deliberate failing test, docs.
+> overdraft fees, interest, the replay engine, the CLI and the golden test. **`php bin/replay`
+> produces ACC-001 390.93 and ACC-002 10.008 end to end, and replaying the stream twice moves
+> no figure.** Still to build: steps 15–16 — the deliberate failing test, docs finalisation.
 >
 > The NUMBERS.md draft that used to live in this file has been superseded by the real file;
 > its figures were re-derived rather than copied, and two were corrected in the process.

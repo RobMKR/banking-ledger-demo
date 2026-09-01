@@ -12,6 +12,7 @@ use Ledger\Domain\Event\EventOutcome;
 use Ledger\Domain\Ledger\Account;
 use Ledger\Domain\Ledger\AccountId;
 use Ledger\Domain\Ledger\AuthorizationId;
+use Ledger\Domain\Ledger\AvailableBalance;
 use Ledger\Domain\Ledger\Exception\AccountCurrencyMismatch;
 use Ledger\Domain\Ledger\Exception\DuplicateAuthorization;
 use Ledger\Domain\Ledger\Exception\InvalidHold;
@@ -45,7 +46,11 @@ final class AuthorizationRuleTest extends TestCase
             Account::emptyIn(self::ACC2, Currency::BHD),
         );
         $this->holds = new HoldRegistry();
-        $this->rule = new AuthorizationRule($this->ledger, $this->holds);
+        $this->rule = new AuthorizationRule(
+            $this->ledger,
+            $this->holds,
+            new AvailableBalance($this->ledger, $this->holds),
+        );
     }
 
     private static function id(string $value = self::ACC1): AccountId

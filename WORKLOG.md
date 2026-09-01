@@ -169,3 +169,5 @@ mtimes afterwards — the only two edits made after the fact.
   figures now come out of the code rather than off a spreadsheet — ACC-001 390.93, ACC-002
   10.008**, matching the hand-derived table exactly, including the D5 snapshot
   (250.00 / -395.00 / 5.00 / -205.00 / -230.00).
+- **23:25** — Steps 12, 13 and 14: replay engine, CLI, golden test. `php bin/replay` now walks
+  the stream end to end and prints ACC-001 390.93 / ACC-002 10.008.

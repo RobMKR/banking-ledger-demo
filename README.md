@@ -19,7 +19,8 @@ Under construction. Built so far:
 - [x] Duplicate event rejection
 - [x] Settlement, orphan rejection
 - [x] Reversal, overdraft fees, interest
-- [ ] Replay engine, CLI, golden test
+- [x] Replay engine, CLI, golden test
+- [ ] The deliberate failing test, docs finalisation
 
 ## Running
 
@@ -29,11 +30,10 @@ composer test               # full suite; must be green
 composer test:known-failure # the one deliberate failure (see below)
 ```
 
-Once the CLI exists:
-
 ```sh
-php bin/replay              # per-day report
-php bin/replay --format=json
+php bin/replay                  # per-day table
+php bin/replay --format=json    # machine-readable, what the golden test asserts against
+php bin/replay --duplicates     # every event emitted twice; the figures must not move
 ```
 
 ## The deliberately failing test
@@ -49,12 +49,41 @@ See REJECTED.md.
 
 ## Reading the output
 
-*(To be written when the presenter exists.)*
-
 The per-day table carries **two** closing-balance columns, because in a bitemporal ledger
-"Day 2's closing balance" is not one number. Day 2 closes at −395.00 as known at the end of
-Day 5, and at +225.00 once E9 arrives on Day 6. Both are correct; they answer different
-questions. AMBIGUITIES.md §6 explains the choice to print both.
+"Day 2's closing balance" is not one number:
+
+| Column | Question it answers |
+|---|---|
+| `Closing (then)` | what the day closed at on the evening it closed |
+| `Closing (final)` | what it closed at once every event had arrived |
+
+Day 2 reads −395.00 and 225.00. Both are correct. Printing only the first hides E9; printing
+only the second hides why three fees were ever charged. AMBIGUITIES.md §6 explains the choice.
+
+`Fees` is what that day's close *raised* — all three of ACC-001's land on the Day 5 row, because
+that is the evening E7 made them due, even though they carry value dates of Day 2, 4 and 5.
+
+`Postings` is the ledger extract: every entry booked that day, with its value date beside its
+booking day and backdated ones marked. **An event and its postings are not the same count.** E10
+is one event and three entries —
+
+```
+  Day 5   CREDIT     3.334   value_date Day 5   E10.1
+  Day 5   CREDIT     3.333   value_date Day 5   E10.2
+  Day 5   CREDIT     3.333   value_date Day 5   E10.3
+```
+
+— because three equal instalments of BHD 10.000 do not exist at three decimal places. That split
+is what refutes criterion 7, so the report shows it rather than saying "E10 POSTED" and leaving
+the most interesting arithmetic in the run invisible. The same section is what makes the
+retroactive fee cascade legible: three fees booked on Day 5, value-dated Days 2, 4 and 5.
+
+Below that, `Authorizations` lists every approve/decline with the arithmetic behind it, and
+`Errors` lists every refusal. A decline is not an error and is not filed as one.
+
+**No console framework.** `symfony/console` was planned and dropped: what it would buy here is
+argument parsing for one optional flag, against a runtime dependency in a project whose whole
+argument is that the arithmetic is the deliverable. `getopt()` is four lines. See REJECTED.md.
 
 ## Expected results
 
@@ -80,6 +109,18 @@ rounding, because rounding is allowed only at explicit, named boundaries.
 **No money library.** `brick/money` would be the right call in production, but
 largest-remainder allocation and rounding-at-named-boundaries are precisely what this
 exercise assesses — delegating them would remove the evidence.
+
+**Constructor injection, one composition root, no container.** Every class takes its
+collaborators and builds none of its own; `Application\LedgerKernel` is the single place that
+knows how the graph fits together. A container library earns its place when wiring is large,
+conditional, or configured at runtime — this is fifteen objects in one arrangement, and
+reflection-driven autowiring would replace a list you can read with a magic you cannot.
+
+The kernel exposes `with(accounts, overdraftFee, interestRate)` alongside `forAssessment()`.
+That is **not** a policy switch: the four resolved ambiguities stay hardcoded and unreachable,
+which is the whole reason there are no flags. It exists so NUMBERS.md's "why that value and not
+half it" can be executed rather than asserted — halving the fee provably changes nothing, and
+raising it past 30.00 provably raises a fourth.
 
 ## Documents
 
