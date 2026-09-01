@@ -18,7 +18,7 @@ Under construction. Built so far:
 - [x] Events, `DecisionLog`, outcomes
 - [x] Duplicate event rejection
 - [x] Settlement, orphan rejection
-- [ ] Reversal, overdraft fees, interest
+- [x] Reversal, overdraft fees, interest
 - [ ] Replay engine, CLI, golden test
 
 ## Running

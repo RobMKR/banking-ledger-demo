@@ -165,3 +165,7 @@ mtimes afterwards — the only two edits made after the fact.
   caller could change an account's available balance and never produce a log record. That is a
   hole straight through the property made structural at step 8, sitting one line from the method
   that guarantees it.
+- **22:06** — Steps 9, 10 and 11 together: reversal, overdraft fees, interest. **The closing
+  figures now come out of the code rather than off a spreadsheet — ACC-001 390.93, ACC-002
+  10.008**, matching the hand-derived table exactly, including the D5 snapshot
+  (250.00 / -395.00 / 5.00 / -205.00 / -230.00).

@@ -91,6 +91,45 @@ final class Ledger
         ));
     }
 
+    /**
+     * The entry a given event posted, or null if that event posted nothing.
+     *
+     * The join between the DecisionLog and the Ledger: a reference is an event id, so this is
+     * how a reversal finds what it undoes. Returns the first match — no event in this design
+     * posts two entries under one reference except a split credit, which is never reversed.
+     */
+    public function entryReferencing(string $reference): ?LedgerEntry
+    {
+        foreach ($this->entries as $entry) {
+            if ($entry->reference === $reference) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    /** True when something in the ledger already reverses the entry posted by $reference. */
+    public function holdsAReversalOf(string $reference): bool
+    {
+        foreach ($this->entries as $entry) {
+            if ($entry->reversesEntryReferenced($reference)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Every entry of one type for an account, in append order. @return list<LedgerEntry> */
+    public function entriesOfType(AccountId $account, EntryType $type): array
+    {
+        return array_values(array_filter(
+            $this->entries,
+            static fn (LedgerEntry $e): bool => $e->belongsTo($account) && $e->type === $type,
+        ));
+    }
+
     /** Every entry, in the order it was appended. @return list<LedgerEntry> */
     public function entries(): array
     {

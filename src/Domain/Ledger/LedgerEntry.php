@@ -27,6 +27,7 @@ final readonly class LedgerEntry
         public LedgerDay $valueDate,
         public LedgerDay $bookedDay,
         public ?string $reference,
+        public ?string $reverses = null,
     ) {
         if (!$type->permits($amount)) {
             throw MisdirectedEntry::wrongSign($type, $amount);
@@ -101,7 +102,21 @@ final readonly class LedgerEntry
             $original->valueDate,
             $bookedDay,
             $reference,
+            $original->reference,
         );
+    }
+
+    /**
+     * The reversal takes the *original's* value date, not the day it was raised on.
+     *
+     * A reversal that landed on its own day would leave the original sitting in a past day it
+     * no longer belongs to, and the pair would not net to zero on any single day. E9 states
+     * value_date Day 2 for exactly this reason — matching E7's — so the brief and this
+     * arrangement agree; the rule is written to hold even where a stream does not say so.
+     */
+    public function reversesEntryReferenced(string $reference): bool
+    {
+        return $this->type === EntryType::REVERSAL && $this->reverses === $reference;
     }
 
     /** True when this entry counts toward the balance of $valueDate as known at $knownAsOf. */
