@@ -13,7 +13,7 @@ Under construction. Built so far:
 - [x] Scaffold — Composer, PHPUnit 11
 - [x] `Money`, `Currency`
 - [x] `Rate`, `Rounding`, `Allocator`
-- [ ] `Ledger`, bitemporal `balanceAsOf`
+- [x] `Ledger`, bitemporal `balanceAsOf`
 - [ ] Holds and authorization
 - [ ] Events, `DecisionLog`, duplicate rejection
 - [ ] Settlement, reversal, overdraft fees, interest

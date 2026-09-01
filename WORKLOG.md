@@ -82,4 +82,25 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   stronger "why not half it" than the dust-threshold answer the plan had. Confirmed the fee cliff
   is strict at 30.00: D3 closes at exactly 0.00 there, which is not negative, so no fourth fee.
   Marked the claims the suite actually asserts and checked every citation resolves to a real test.
+- **17:11** — Step 4, the core. `LedgerDay`, `AccountId`, `Account`, `EntryType`, `LedgerEntry`,
+  `Ledger`. `balanceAsOf(account, valueDate, knownAsOf)` requires **both** dates and offers no
+  convenience that defaults one away — collapsing the two dimensions is the one mistake that
+  silently yields a plausible wrong answer, so the API refuses to make it easy.
+
+  Design calls: opening balance is a field, not a synthetic entry, so the ledger never holds a
+  record no event produced. Amounts are stored signed (balance is a plain sum) but debit-direction
+  named constructors take a positive figure and negate, keeping the sign convention in one place;
+  `EntryType::permits()` then makes a wrongly-signed entry unconstructable. Append rejects a
+  backdated *booking* while allowing a backdated *value date* — the first would rewrite what the
+  ledger already knew, the second is the whole point of the exercise.
+
+  **Criterion 1 is now asserted by the suite**: Day 2 at close of Day 5, pre-fee, is -370.00.
+  Also pinned the three-answers property — the same bucket reads 250.00 / -370.00 / 250.00 as
+  known at D4 / D5 / D6. Append-only is checked structurally by reflection rather than promised in
+  a comment.
+
+  Mutation-checked the primitive, which was the point: dropping the knownAsOf filter fails 9
+  tests, dropping valueDate fails 14, transposing the two fails 9, and <= to < fails 15. Had
+  dropping knownAsOf left the suite green, the tests would not have been testing bitemporality at
+  all. 273 tests green.
 
