@@ -44,3 +44,5 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   unresolved rather than talked round.
 - **16:03** — Cut AMBIGUITIES §12 (reversal guards) and §13 (zero not positive). Literally AI BS
 - **16:07** — Created dirty plan.md for Agentic implementation
+- **16:10** — Manual review of plan.md before implementation
+- **16:33** — Added deduplication logic to plan.md, polished slightly, and removed commit sequencing (will be pushed by human, not AI)

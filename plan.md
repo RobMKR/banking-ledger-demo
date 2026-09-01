@@ -208,6 +208,42 @@ it never produced. The `sealed` row is the one that matters most: it is the figu
 assessor expecting "exactly one fee" would look for, and it still does not vindicate
 criterion 2, because the fee lands on D5.
 
+## Beyond the brief — duplicate event rejection
+
+The stream contains no duplicates, so nothing below is required by the brief. It is a
+deliberate addition, flagged as such so it is not mistaken for a requirement read into the
+spec — the same discipline REJECTED.md applies in the other direction.
+
+**Why it earns its place.** The ledger is append-only: no entry is ever mutated or deleted. A
+double-post is therefore *unrecoverable* — it cannot be deleted, only offset by a compensating
+reversal, which is exactly the mess criterion 6 is refused over. Meanwhile every real event
+stream is at-least-once; retries and operator re-runs are routine. Without a guard the engine
+would post E7 twice and produce a silently wrong ledger with no error anywhere.
+
+**The rule.** An event whose ID has already been seen is rejected and recorded in the
+`DecisionLog` as `REJECTED_DUPLICATE_EVENT_ID`. Nothing is posted. The check runs first — before
+any rule, before validation, before the ledger or hold registry are touched.
+
+Kept deliberately minimal. Two richer variants were considered and dropped as scope creep:
+
+- *Payload hashing*, to separate a benign retry from a same-ID-different-payload integrity
+  breach. The stream has neither case, and nothing here would act on the distinction.
+- *Authorization-ID dedup*, so a second `AUTHORIZATION` claiming `Auth-A` could not
+  double-reserve. No such event exists, and the hold registry is already keyed by auth ID.
+
+**Stated limitations**, since a guard that overstates its coverage is worse than none:
+
+1. IDs only — a same-ID-different-payload event is absorbed as a plain duplicate, and the
+   upstream integrity problem is never surfaced.
+2. Event IDs only — a second authorization claiming a live auth ID would still double-reserve.
+3. In-memory, so the registry is scoped to a single replay. The brief bans persistence, so there
+   is nowhere to keep it; a real deployment needs a durable idempotency key.
+
+**Documented here and in the README, not in AMBIGUITIES.md.** This is a design decision, not a
+spec ambiguity — the brief is not unclear about duplicates, it simply never raises them. Filing
+it there would repeat the mistake already corrected when §12 (reversal guards) and §13 ("zero is
+not positive") were cut as padding.
+
 ## Structure
 
 ```
@@ -216,7 +252,8 @@ src/
     Money/       Currency, Money, Rate, Rounding, Allocator (largest-remainder)
     Ledger/      AccountId, LedgerDay, EntryType, LedgerEntry,
                  Ledger (append-only; balanceAsOf), Hold, HoldRegistry
-    Event/       LedgerEvent + 6 concrete types, EventOutcome, DecisionLog
+    Event/       LedgerEvent + 6 concrete types, EventId, ProcessedEvents
+                 (seen-ID registry), EventOutcome, DecisionLog
     Rule/        AuthorizationRule, OverdraftFeeRule, InterestAccrualRule,
                  SettlementRule, ReversalRule
                  (one implementation each — no strategy interfaces, no
@@ -229,7 +266,7 @@ src/
     Port/        EventSourcePort, ClosePresenterPort   # the only real boundaries
     Dto/         DailyReport  (carries as-known AND restated columns)
   Infrastructure/
-    EventSource/ AssessmentScenarioSource
+    EventSource/ AssessmentScenarioSource (+ withDuplicates() variant)
     Presenter/   ConsoleTablePresenter, JsonPresenter
 bin/replay
 tests/
@@ -244,29 +281,6 @@ cargo-culting and are deliberately avoided; the README states this reasoning exp
 Rejections and declines are recorded as append-only `DecisionLog` entries with reasons —
 never silently dropped. The `Ledger` holds financial entries only; the `DecisionLog` holds
 every event and its outcome.
-
-## Commit sequence (intact history, no squashing)
-
-1. Scaffold: composer, phpunit.xml, README skeleton, WORKLOG start
-2. Money, Currency + tests
-3. Rate, Rounding, Allocator + tests — criterion 7 dies here
-4. LedgerEntry, Ledger, bitemporal `balanceAsOf` + tests — the core
-5. Hold, HoldRegistry, available balance, AuthorizationPolicy + tests — Auth-B declines
-6. Events, DecisionLog, outcomes
-7. Settlement handling + orphan-settlement rejection, logged to the DecisionLog
-8. Reversal handling (guard double-reversal and reversal of unknown entries)
-9. Overdraft fee assessment, single ascending pass — criteria 2 and 6 die here
-10. InterestSchedule + restated accruals + D6 capitalization — criterion 8 dies here
-11. ReplayEngine + daily close orchestration
-12. CLI adapter + presenters
-13. Golden test locking the shipped configuration end-to-end
-14. The deliberate failing test, inline-annotated
-15. Docs: REJECTED.md, AMBIGUITIES.md, NUMBERS.md, README, WORKLOG
-
-WORKLOG.md is appended to *in the same commit as the work it describes*, never backfilled
-at the end — the brief asks for it "timestamped, real", and a worklog written in one sitting
-at commit 15 would be neither. Commit 1 creates it; every commit after that adds its entry,
-so the file's history and the repo's history corroborate each other.
 
 ## The deliberate failing test
 
@@ -336,30 +350,16 @@ free choice would be the easiest way to look like the analysis was never done.
 
 Written up in AMBIGUITIES.md, which is authoritative. Index, so this plan stays navigable:
 
-| § | Ambiguity | Affects the numbers? |
-|---|---|---|
-| 1 | Does a backdated entry reopen a closed day for assessment? | yes — 75.00 vs 25.00 in fees |
-| 2 | Settlement with no matching authorization | yes — 390.93 vs 210.69 |
-| 3 | Does reversing E7 also unwind the fees it caused? | yes — 390.93 vs 466.03 |
-| 4 | Are accruals restated against final knowledge? | yes — 390.93 vs 390.81 |
-| 5 | A fee's own value_date once assessment is retroactive | no, given §1 |
-| 6 | Which closing balance the per-day output prints | no — presentation |
-| 7 | Restated accruals must restate the printout too | no — presentation |
-| 8 | Interest circularity on Day 6 | no — resolved by ordering |
-| 9 | "Three equal instalments" is unsatisfiable at 3dp | no — same value_date |
-| 10 | Stream ordering (E10 booked D5, listed after E9) | no — ACC-002 only |
-| 11 | Backdated debits bypass the available-balance check | no — as specified |
-| 12 | Criterion 5 names Auth-B, whose "if" never fires | no — code unchanged |
-
-§1–§4 are the four policy decisions above; each carries its rejected reading's day-by-day
-arithmetic. Two earlier entries — defensive reversal guards, and "zero is not positive" —
-were cut as padding: neither is an ambiguity, and inflating a file the brief says must not be
-near-empty is worse than having fewer real entries.
-
 ## Verification
 
 - `composer test` — full suite green; the golden test locks the shipped configuration
   end-to-end (per-day balances, fees, authorization states, errors, capitalization).
+- **Idempotent replay** — run against the `withDuplicates()` source, which emits each of the ten
+  events twice. The `DailyReport` must be identical to the single-emission run (390.93 / 10.008,
+  three fees on D2/D4/D5), the ledger must hold the same number of entries, and the
+  `DecisionLog` must carry exactly ten `REJECTED_DUPLICATE_EVENT_ID` records. The property worth
+  having: *replaying the whole stream twice is a no-op.* It also cross-checks the separate
+  "once per day per account" fee guard — a leak in either shows up as a changed fee total.
 - `composer test:known-failure` — shows the one deliberate failure with its annotation.
 - `php bin/replay` — expect ACC-001 = 390.93, ACC-002 = 10.008, three fees on D2/D4/D5,
   Auth-A approved then settled, Auth-B declined, E6 rejected.
