@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Ledger\Domain\Rule;
 
 use Ledger\Domain\Ledger\AuthorizationId;
-use Ledger\Domain\Ledger\Hold;
 use Ledger\Domain\Money\Money;
 
 /**
@@ -14,8 +13,19 @@ use Ledger\Domain\Money\Money;
  * A decline records the available balance it was refused against — the brief asks the report
  * to print authorization states *and* errors, and "declined" without a figure is not a reason.
  * Auth-B is declined at -155.00, and that number is the whole of its explanation.
+ *
+ * A *verdict*, not a Decision, and the distinction is worth holding on to. This is the rich
+ * result one rule computes and then discards: typed money, both sides of the balance test.
+ * `Event\Decision` is the flat record the DecisionLog keeps for every event of every type,
+ * where the same arithmetic survives only as a sentence. `AuthorizationRule::apply()` is
+ * where one becomes the other.
+ *
+ * It carries no Hold. A verdict is the answer to "does this pass the available-balance
+ * test", which is a question, not an act — the hold is a consequence that only apply()
+ * brings about. Holding one here would make it possible to hand back a reservation that was
+ * never registered, or to read a registered one off an object that never placed it.
  */
-final readonly class AuthorizationDecision
+final readonly class AuthorizationVerdict
 {
     private function __construct(
         public AuthorizationId $authorization,
@@ -23,20 +33,16 @@ final readonly class AuthorizationDecision
         public Money $amount,
         public Money $availableBefore,
         public Money $availableAfter,
-        public ?Hold $hold,
     ) {
     }
 
-    public static function approved(Hold $hold, Money $availableBefore, Money $availableAfter): self
-    {
-        return new self(
-            $hold->authorization,
-            true,
-            $hold->amount,
-            $availableBefore,
-            $availableAfter,
-            $hold,
-        );
+    public static function approved(
+        AuthorizationId $authorization,
+        Money $amount,
+        Money $availableBefore,
+        Money $availableAfter,
+    ): self {
+        return new self($authorization, true, $amount, $availableBefore, $availableAfter);
     }
 
     public static function declined(
@@ -45,7 +51,7 @@ final readonly class AuthorizationDecision
         Money $availableBefore,
         Money $availableAfter,
     ): self {
-        return new self($authorization, false, $amount, $availableBefore, $availableAfter, null);
+        return new self($authorization, false, $amount, $availableBefore, $availableAfter);
     }
 
     public function isDeclined(): bool

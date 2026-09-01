@@ -17,7 +17,8 @@ Under construction. Built so far:
 - [x] Holds, available balance, authorization rule
 - [x] Events, `DecisionLog`, outcomes
 - [x] Duplicate event rejection
-- [ ] Settlement, reversal, overdraft fees, interest
+- [x] Settlement, orphan rejection
+- [ ] Reversal, overdraft fees, interest
 - [ ] Replay engine, CLI, golden test
 
 ## Running

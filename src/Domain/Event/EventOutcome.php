@@ -29,7 +29,13 @@ enum EventOutcome: string
     /** An event id already seen in this replay. Nothing is posted a second time. */
     case REJECTED_DUPLICATE_EVENT_ID = 'REJECTED_DUPLICATE_EVENT_ID';
 
-    /** Malformed, or aimed at an account the ledger does not hold. */
+    /**
+     * Malformed, aimed at an account the ledger does not hold, or coherent in itself but
+     * impossible against the current state — a settlement for an authorization that was
+     * already settled, say. Deliberately one code rather than several: the stream produces
+     * none of them, and the reason field carries the specifics. Only the two rejections the
+     * brief actually names get a code of their own.
+     */
     case REJECTED_INVALID_EVENT = 'REJECTED_INVALID_EVENT';
 
     /** True when nothing was posted and nothing reserved. */

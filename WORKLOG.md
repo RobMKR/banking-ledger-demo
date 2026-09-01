@@ -152,3 +152,16 @@ mtimes afterwards — the only two edits made after the fact.
 - **20:15** — Step 7, duplicate rejection. `ProcessedEvents` (the seen-id set) and
   `DuplicateEventRule` (the gate that turns it into a `Decision`). Kept apart on purpose: one is
   a dumb set, the other is domain messaging, and both are testable alone.
+- **20:40** — Step 8, settlement — and made "everything is logged" structural rather than a
+  habit. Every rule now returns a `Decision`, so `AuthorizationRule` gained `apply()` beside its
+  `authorize()`: the latter is the arithmetic, the former is what the engine calls. There is no
+  branch in either rule that returns nothing, which turns "every event is accounted for" into a
+  property of the return type instead of discipline the caller has to keep.
+- **20:48** — Renamed `AuthorizationDecision` to `AuthorizationVerdict`. Two types called
+  "Decision" one namespace apart, meaning different things — and step 8 made it worse, because
+  `apply()` now computes one and returns the other, a line apart in the same method.
+- **20:54** — Split `AuthorizationRule` into a pure query and a single mutator. `authorize()` was
+  public *and* it reserved funds while returning a verdict rather than a `Decision` — so any
+  caller could change an account's available balance and never produce a log record. That is a
+  hole straight through the property made structural at step 8, sitting one line from the method
+  that guarantees it.

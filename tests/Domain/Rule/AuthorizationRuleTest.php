@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Ledger\Tests\Domain\Rule;
 
+use Ledger\Domain\Event\AuthorizationEvent;
+use Ledger\Domain\Event\Decision;
+use Ledger\Domain\Event\DecisionLog;
+use Ledger\Domain\Event\EventId;
+use Ledger\Domain\Event\EventOutcome;
 use Ledger\Domain\Ledger\Account;
 use Ledger\Domain\Ledger\AccountId;
 use Ledger\Domain\Ledger\AuthorizationId;
@@ -16,14 +21,14 @@ use Ledger\Domain\Ledger\LedgerDay;
 use Ledger\Domain\Ledger\LedgerEntry;
 use Ledger\Domain\Money\Currency;
 use Ledger\Domain\Money\Money;
-use Ledger\Domain\Rule\AuthorizationDecision;
+use Ledger\Domain\Rule\AuthorizationVerdict;
 use Ledger\Domain\Rule\AuthorizationRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(AuthorizationRule::class)]
-#[CoversClass(AuthorizationDecision::class)]
+#[CoversClass(AuthorizationVerdict::class)]
 final class AuthorizationRuleTest extends TestCase
 {
     private const ACC1 = 'ACC-001';
@@ -58,9 +63,10 @@ final class AuthorizationRuleTest extends TestCase
         return Money::of($amount, Currency::AED);
     }
 
-    private function authorize(string $auth, string $amount, int $day): AuthorizationDecision
+    /** The pure question: would this be approved, and against what balance? Places nothing. */
+    private function assess(string $auth, string $amount, int $day): AuthorizationVerdict
     {
-        return $this->rule->authorize(AuthorizationId::of($auth), self::id(), self::aed($amount), self::day($day));
+        return $this->rule->assess(AuthorizationId::of($auth), self::id(), self::aed($amount), self::day($day));
     }
 
     // ================================================ the assessment stream, event by event
@@ -72,10 +78,15 @@ final class AuthorizationRuleTest extends TestCase
         $this->ledger->append(LedgerEntry::debit(self::id(), self::aed('950.00'), self::day(1), self::day(1), 'E2'));
     }
 
-    /** E3 — Day 2. Auth-A asks to hold 200.00. */
-    private function replayAuthA(): AuthorizationDecision
+    /**
+     * E3 — Day 2. Auth-A asks to hold 200.00.
+     *
+     * Goes through apply(), not assess(), because the replay has to actually reserve the funds —
+     * every later day depends on that 200.00 being live until E5 releases it.
+     */
+    private function replayAuthA(): Decision
     {
-        return $this->authorize('Auth-A', '200.00', 2);
+        return $this->applyEvent('E3', 'Auth-A', '200.00', 2);
     }
 
     /** E4 — Day 3. Credit 400.00. */
@@ -120,23 +131,63 @@ final class AuthorizationRuleTest extends TestCase
     {
         $this->replayDayOne();
 
-        $decision = $this->replayAuthA();
+        $verdict = $this->assess('Auth-A', '200.00', 2);
 
-        self::assertTrue($decision->approved);
-        self::assertSame('250.00', $decision->availableBefore->format());
-        self::assertSame('50.00', $decision->availableAfter->format());
-        self::assertSame('APPROVED', $decision->state());
+        self::assertTrue($verdict->approved);
+        self::assertSame('250.00', $verdict->availableBefore->format());
+        self::assertSame('50.00', $verdict->availableAfter->format());
+        self::assertSame('APPROVED', $verdict->state());
     }
 
     public function testAnApprovedAuthorizationReservesTheFunds(): void
     {
         $this->replayDayOne();
-        $decision = $this->replayAuthA();
+        $this->replayAuthA();
 
-        self::assertTrue($this->holds->has(AuthorizationId::of('Auth-A')));
-        self::assertTrue($this->holds->find(AuthorizationId::of('Auth-A'))->isActive());
-        self::assertSame($decision->hold, $this->holds->find(AuthorizationId::of('Auth-A')));
+        $hold = $this->holds->find(AuthorizationId::of('Auth-A'));
+        self::assertTrue($hold->isActive());
+        self::assertSame('200.00', $hold->amount->format());
+        self::assertSame(2, $hold->placedOn->number);
         self::assertSame('200.00', $this->holds->totalHeldFor($this->ledger->account(self::id()))->format());
+    }
+
+    /**
+     * assess() answers a question; it does not act on the answer.
+     *
+     * This is what makes it safe to expose. Reserving funds is apply()'s job alone, and apply()
+     * cannot reserve without also returning the Decision that records it — so there is no path
+     * through this class that changes an account's available balance without leaving a trace.
+     * Were assess() to place the hold, "every reservation is logged" would go back to being a
+     * convention every future call site has to remember.
+     */
+    public function testAssessingAnAuthorizationReservesNothing(): void
+    {
+        $this->replayDayOne();
+
+        $verdict = $this->assess('Auth-A', '200.00', 2);
+
+        self::assertTrue($verdict->approved, 'it would be approved');
+        self::assertFalse($this->holds->has(AuthorizationId::of('Auth-A')), 'but nothing is held');
+        self::assertSame('0.00', $this->holds->totalHeldFor($this->ledger->account(self::id()))->format());
+        self::assertSame('250.00', $this->assess('Auth-A', '200.00', 2)->availableBefore->format(),
+            'and asking again sees the same account');
+    }
+
+    /** Asked ten times, the account is exactly as it was. Only apply() moves anything. */
+    public function testAssessingIsRepeatableAndApplyIsNot(): void
+    {
+        $this->replayDayOne();
+
+        for ($i = 0; $i < 10; $i++) {
+            self::assertTrue($this->assess('Auth-A', '200.00', 2)->approved);
+        }
+        self::assertSame(0, $this->holds->count());
+
+        $this->replayAuthA();
+
+        self::assertSame(1, $this->holds->count());
+        self::assertSame('50.00', $this->assess('Auth-C', '10.00', 2)->availableBefore->format(),
+            'now the 200.00 is genuinely reserved');
     }
 
     /**
@@ -171,19 +222,19 @@ final class AuthorizationRuleTest extends TestCase
     {
         $this->replayThroughE7();
 
-        $decision = $this->authorize('Auth-B', '90.00', 5);
+        $verdict = $this->assess('Auth-B', '90.00', 5);
 
-        self::assertTrue($decision->isDeclined());
-        self::assertSame('-155.00', $decision->availableBefore->format());
-        self::assertSame('-245.00', $decision->availableAfter->format());
-        self::assertSame('DECLINED', $decision->state());
+        self::assertTrue($verdict->isDeclined());
+        self::assertSame('-155.00', $verdict->availableBefore->format());
+        self::assertSame('-245.00', $verdict->availableAfter->format());
+        self::assertSame('DECLINED', $verdict->state());
     }
 
     public function testADeclinedAuthorizationReservesNothing(): void
     {
         $this->replayThroughE7();
 
-        $this->authorize('Auth-B', '90.00', 5);
+        $this->assess('Auth-B', '90.00', 5);
 
         self::assertFalse($this->holds->has(AuthorizationId::of('Auth-B')));
         self::assertSame('0.00', $this->holds->totalHeldFor($this->ledger->account(self::id()))->format());
@@ -208,10 +259,10 @@ final class AuthorizationRuleTest extends TestCase
         // deliberately no release
         $this->replayBackdatedDebit();
 
-        $decision = $this->authorize('Auth-B', '90.00', 5);
+        $verdict = $this->assess('Auth-B', '90.00', 5);
 
-        self::assertTrue($decision->isDeclined());
-        self::assertSame('-355.00', $decision->availableBefore->format());
+        self::assertTrue($verdict->isDeclined());
+        self::assertSame('-355.00', $verdict->availableBefore->format());
     }
 
     public function testTheDeclineExplainsItselfWithTheArithmetic(): void
@@ -220,7 +271,7 @@ final class AuthorizationRuleTest extends TestCase
 
         self::assertSame(
             'DECLINED: available -155.00 less a hold of 90.00 leaves -245.00, below zero.',
-            $this->authorize('Auth-B', '90.00', 5)->reason(),
+            $this->assess('Auth-B', '90.00', 5)->reason(),
         );
     }
 
@@ -230,7 +281,7 @@ final class AuthorizationRuleTest extends TestCase
 
         self::assertSame(
             'APPROVED: available 250.00 less a hold of 200.00 leaves 50.00, at or above zero.',
-            $this->replayAuthA()->reason(),
+            $this->assess('Auth-A', '200.00', 2)->reason(),
         );
     }
 
@@ -256,10 +307,10 @@ final class AuthorizationRuleTest extends TestCase
     {
         $this->replayDayOne();
 
-        $decision = $this->authorize('Auth-X', $amount, 2);
+        $verdict = $this->assess('Auth-X', $amount, 2);
 
-        self::assertSame($approved, $decision->approved);
-        self::assertSame($after, $decision->availableAfter->format());
+        self::assertSame($approved, $verdict->approved);
+        self::assertSame($after, $verdict->availableAfter->format());
     }
 
     /** A second authorization is decided against what the first already reserved. */
@@ -268,12 +319,93 @@ final class AuthorizationRuleTest extends TestCase
         $this->replayDayOne();
         $this->replayAuthA();
 
-        $second = $this->authorize('Auth-C', '60.00', 2);
+        $second = $this->assess('Auth-C', '60.00', 2);
         self::assertFalse($second->approved, '250.00 - 200.00 held - 60.00 is below zero');
         self::assertSame('50.00', $second->availableBefore->format());
 
-        $third = $this->authorize('Auth-D', '50.00', 2);
+        $third = $this->assess('Auth-D', '50.00', 2);
         self::assertTrue($third->approved, 'but exactly the remaining 50.00 fits');
+    }
+
+    // ================================================ the event-shaped entry point
+
+    private function applyEvent(string $id, string $auth, string $amount, int $day): Decision
+    {
+        return $this->rule->apply(new AuthorizationEvent(
+            EventId::of($id),
+            self::id(),
+            AuthorizationId::of($auth),
+            self::aed($amount),
+            self::day($day),
+            self::day($day),
+        ));
+    }
+
+    public function testE3IsLoggedAsApprovedWithItsArithmetic(): void
+    {
+        $this->replayDayOne();
+
+        $decision = $this->applyEvent('E3', 'Auth-A', '200.00', 2);
+
+        self::assertSame(EventOutcome::APPROVED, $decision->outcome);
+        self::assertSame('E3', $decision->event->value);
+        self::assertSame(2, $decision->day->number);
+        self::assertSame(
+            'APPROVED: available 250.00 less a hold of 200.00 leaves 50.00, at or above zero.',
+            $decision->reason,
+        );
+    }
+
+    /**
+     * E8 posts nothing and reserves nothing, so this record is its only trace. An unlogged
+     * decline is indistinguishable from an event the engine never saw — which is precisely
+     * the failure the DecisionLog exists to rule out.
+     */
+    public function testE8IsLoggedAsDeclinedWithTheBalanceItWasRefusedAgainst(): void
+    {
+        $this->replayThroughE7();
+
+        $decision = $this->applyEvent('E8', 'Auth-B', '90.00', 5);
+
+        self::assertSame(EventOutcome::DECLINED, $decision->outcome);
+        self::assertSame(
+            'DECLINED: available -155.00 less a hold of 90.00 leaves -245.00, below zero.',
+            $decision->reason,
+        );
+        self::assertFalse($this->holds->has(AuthorizationId::of('Auth-B')));
+    }
+
+    /**
+     * A decline is recorded but is not an error. The available-balance rule working exactly as
+     * the brief specifies is the ordinary path for Auth-B; filing it under errors would report
+     * correct behaviour as a fault.
+     */
+    public function testADeclineIsOnTheRecordWithoutBeingAnError(): void
+    {
+        $this->replayThroughE7();
+        $log = new DecisionLog();
+
+        $log->record($this->applyEvent('E8', 'Auth-B', '90.00', 5));
+
+        self::assertCount(1, $log->all());
+        self::assertCount(0, $log->rejections());
+        self::assertFalse($log->all()[0]->outcome->isError());
+    }
+
+    public function testAnAuthorizationLeavesATraceWhicheverWayItGoes(): void
+    {
+        $this->replayDayOne();
+        $log = new DecisionLog();
+        $entriesBefore = $this->ledger->count();
+
+        $log->record($this->applyEvent('E3', 'Auth-A', '200.00', 2));
+        $log->record($this->applyEvent('E8', 'Auth-B', '500.00', 2));
+
+        self::assertSame(
+            ['APPROVED', 'DECLINED'],
+            array_map(static fn (Decision $d): string => $d->outcome->value, $log->all()),
+        );
+        self::assertSame($entriesBefore, $this->ledger->count(), 'and neither wrote to the ledger');
     }
 
     // ================================================ guards
@@ -282,7 +414,7 @@ final class AuthorizationRuleTest extends TestCase
     {
         $this->expectException(AccountCurrencyMismatch::class);
 
-        $this->rule->authorize(
+        $this->rule->assess(
             AuthorizationId::of('Auth-A'),
             self::id(),
             Money::of('90.000', Currency::BHD),
@@ -308,7 +440,7 @@ final class AuthorizationRuleTest extends TestCase
         $this->replayDayOne();
 
         $this->expectException(InvalidHold::class);
-        $this->authorize('Auth-A', $amount, 2);
+        $this->assess('Auth-A', $amount, 2);
     }
 
     /**
@@ -325,7 +457,7 @@ final class AuthorizationRuleTest extends TestCase
         $this->replayThroughE7();
 
         $this->expectException(InvalidHold::class);
-        $this->authorize('Auth-B', $amount, 5);
+        $this->assess('Auth-B', $amount, 5);
     }
 
     public function testRefusesASecondAuthorizationClaimingALiveId(): void
@@ -334,7 +466,7 @@ final class AuthorizationRuleTest extends TestCase
         $this->replayAuthA();
 
         $this->expectException(DuplicateAuthorization::class);
-        $this->authorize('Auth-A', '10.00', 2);
+        $this->assess('Auth-A', '10.00', 2);
     }
 
     /**
@@ -345,10 +477,11 @@ final class AuthorizationRuleTest extends TestCase
     public function testADeclinedAuthorizationDoesNotBurnItsId(): void
     {
         $this->replayThroughE7();
-        $this->authorize('Auth-B', '90.00', 5);
+        self::assertSame(EventOutcome::DECLINED, $this->applyEvent('E8', 'Auth-B', '90.00', 5)->outcome);
 
         $this->ledger->append(LedgerEntry::credit(self::id(), self::aed('1000.00'), self::day(5), self::day(5)));
 
-        self::assertTrue($this->authorize('Auth-B', '90.00', 5)->approved);
+        self::assertSame(EventOutcome::APPROVED, $this->applyEvent('E8b', 'Auth-B', '90.00', 5)->outcome);
+        self::assertTrue($this->holds->has(AuthorizationId::of('Auth-B')));
     }
 }
