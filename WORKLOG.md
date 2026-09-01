@@ -2,6 +2,8 @@
 
 Append-only — nothing edited after the fact other than the first event, which was added later!. Times local (+04).
 Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
+The 19:32 and 19:36 entries were written with estimated times and corrected against file
+mtimes afterwards — the only two edits made after the fact.
 
 ## 2026-09-01
 
@@ -135,3 +137,15 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
   no figure in the window depends on it, so it is documented in `Hold` rather than raised to
   AMBIGUITIES.
 - **17:33** — Took a break! Work will continue after 8:00PM 
+- **19:32** — Step 6, the event layer. `EventId`, `EventType`, five concrete events,
+  `EventStream`, `EventOutcome`, `Decision`, `DecisionLog`.
+
+  **AMBIGUITIES §10 is now executable.** `EventStream::inReplayOrder()` sorts on presentation
+  day and keeps the given order within a day. The stability half is the one with teeth: within
+  Day 5 the order is E7 then E8, and if the sort reordered them Auth-B would be judged against
+  +465.00 instead of -155.00 and approve. The one decision the exercise is built around would
+  hang on a sort algorithm's tie-breaking. Test asserts it directly, plus a seven-event tie run.
+
+  Transcribed the ten events once, into `tests/Support/AssessmentStream`. It moves to the
+  Infrastructure event source at step 13 and this delegates — a second transcription is a
+  second chance to mistype 620.00.

@@ -15,7 +15,8 @@ Under construction. Built so far:
 - [x] `Rate`, `Rounding`, `Allocator`
 - [x] `Ledger`, bitemporal `balanceAsOf`
 - [x] Holds, available balance, authorization rule
-- [ ] Events, `DecisionLog`, duplicate rejection
+- [x] Events, `DecisionLog`, outcomes
+- [ ] Duplicate event rejection
 - [ ] Settlement, reversal, overdraft fees, interest
 - [ ] Replay engine, CLI, golden test
 

@@ -2,9 +2,9 @@
 
 > **Status.** REJECTED.md, AMBIGUITIES.md, NUMBERS.md, README.md and WORKLOG.md are written
 > and authoritative; this plan defers to them where they overlap. Commit steps 1–5 are built
-> and green (327 tests) — money, rounding, allocation, the bitemporal ledger, holds and the
-> authorization rule. Still to build: steps 6–16 — events, settlement, reversal, fees,
-> interest, replay engine, CLI.
+> and green (390 tests) — money, rounding, allocation, the bitemporal ledger, holds, the
+> authorization rule, and the event/decision layer. Still to build: steps 7–16 — duplicate
+> rejection, settlement, reversal, fees, interest, replay engine, CLI.
 >
 > The NUMBERS.md draft that used to live in this file has been superseded by the real file;
 > its figures were re-derived rather than copied, and two were corrected in the process.
