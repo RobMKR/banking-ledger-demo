@@ -1,0 +1,29 @@
+{
+    "name": "robert/ledger",
+    "description": "In-memory, append-only account ledger core",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ledger\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ledger\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:known-failure": "phpunit --group known-failure"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

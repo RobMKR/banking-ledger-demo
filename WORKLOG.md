@@ -46,3 +46,14 @@ Entries before 15:20 reconstructed from file mtimes, ±5 min, marked `~`.
 - **16:07** — Created dirty plan.md for Agentic implementation
 - **16:10** — Manual review of plan.md before implementation
 - **16:33** — Added deduplication logic to plan.md, polished slightly, and removed commit sequencing (will be pushed by human, not AI)
+- **16:42** — Step 1 scaffold: composer.json (PHP 8.4, PHPUnit 11), phpunit.xml with
+  `known-failure` excluded from the default suite, README skeleton, vendor ignored. Left
+  symfony/console out until the CLI commit actually needs it rather than carrying an unused
+  dep for twelve commits.
+- **16:42** — Step 2 Money + Currency. Currency is an enum, not an open value object — the brief
+  fixes the set at two, so an unsupported currency should be unconstructable. Money holds int
+  minor units; parsing is pure string work so no value passes through a float. Two decisions
+  worth noting: input with more decimals than the currency holds *throws* rather than rounds
+  (rounding belongs at named boundaries only), and every arithmetic path checks `is_int` because
+  PHP silently promotes integer overflow to float. Refused PHP_INT_MIN outright since it cannot
+  be negated. 60 tests green.
