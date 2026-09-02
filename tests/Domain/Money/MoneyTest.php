@@ -94,6 +94,41 @@ final class MoneyTest extends TestCase
         Money::of('99999999999999999999.00', Currency::AED);
     }
 
+    public function testRefusingAnOverRangeAmountEmitsNoDiagnostic(): void
+    {
+        $raised = [];
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            $raised[] = $message;
+
+            return true;
+        });
+
+        try {
+            $threw = false;
+            try {
+                Money::of('99999999999999999999.00', Currency::AED);
+            } catch (ArithmeticOverflow) {
+                $threw = true;
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertTrue($threw, 'the amount must still be refused');
+        self::assertSame([], $raised, 'and refused without raising a diagnostic');
+    }
+
+    public function testTheIntegerBoundaryIsExactNotApproximate(): void
+    {
+        // PHP_INT_MAX minor units, as a 2dp amount: 92233720368547758.07
+        $max = Money::of('92233720368547758.07', Currency::AED);
+        self::assertSame(PHP_INT_MAX, $max->minor);
+
+        // One minor unit more. Same digit count, still overflows.
+        $this->expectException(ArithmeticOverflow::class);
+        Money::of('92233720368547758.08', Currency::AED);
+    }
+
     public function testZeroIsZeroInItsCurrency(): void
     {
         $zero = Money::zero(Currency::BHD);

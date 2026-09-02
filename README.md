@@ -8,77 +8,90 @@ No web layer, no persistence, no UI, no database. PHP 8.4, PHPUnit 11, no runtim
 
 ## Running
 
-```sh
-composer install
-```
-
-### The test suite
+**You do not need Composer, and you do not need PHP.** Everything goes through one script:
 
 ```sh
-composer test
+./run                  # the full suite — 543 tests, expected green
+./run golden           # the golden test alone — 32 tests, expected green
+./run known-failure    # the one test committed failing, deliberately
+./run replay           # the per-day report
+./run help             # every command
 ```
 
-**541 tests, expected green.** The one deliberately failing test is excluded from this run, so a
-green result means "everything claimed to work, works" rather than "nothing is broken that we
-admit to". Add `--testdox` to read the assertions as sentences:
+It picks an engine and tells you which: **your own PHP** if it is 8.4 or newer, otherwise
+**Docker**. Force either with `--local` or `--docker`. Dependencies install themselves on first
+run; `composer.phar` is committed here, so nothing needs installing globally.
+
+### If you have Docker
+
+Nothing else is required — not PHP, not Composer:
 
 ```sh
-vendor/bin/phpunit --testdox
+./run --docker
 ```
 
-### The golden test alone
+First run pulls two official images and takes a minute; after that it is instant, because
+`vendor/` persists on your side of the mount. The raw command, if you would rather not trust a
+script:
 
 ```sh
-composer test:golden
+docker run --rm -v "$PWD":/app -w /app php:8.4-cli php composer.phar test
 ```
 
-**32 tests, expected green.** Runs the whole ten-event stream through the engine and locks every
-figure the brief asks about — both closing balances, both bitemporal columns for all six days,
-the three fees, every event's outcome, the instalment split, and idempotent replay.
-
-Every one of those numbers existed in `plan.md` before the first line of implementation, and I
-re-derived each of them by hand in Python with `Decimal`/`ROUND_HALF_UP` rather than trusting
-the plan — which is what caught two errors in it. So the test locks an independently verified
-answer rather than whatever the implementation happened to produce. A failure here means one of two things, and both
-are worth being told about: **a bug, or a documented decision silently changed.**
-
-Equivalent, running PHPUnit directly:
+That one works only once dependencies exist. Installing them needs a *different* image, and the
+reason is worth stating because it is not obvious: **`php:8.4-cli` ships neither `ext-zip` nor an
+`unzip` binary**, so Composer cannot extract a single package in it. The official `composer`
+image has `unzip`, `git` and `ext-zip`:
 
 ```sh
-vendor/bin/phpunit tests/Golden
-vendor/bin/phpunit --filter AssessmentReplayTest
+docker run --rm -v "$PWD":/app -w /app --entrypoint composer composer:2 install
 ```
 
-### The deliberately failing test
+The code still *runs* on `php:8.4-cli`, at the version it targets. `./run` does both steps for
+you. There is no Dockerfile and no image to build — two official images, cached after first use.
+
+**If the pull fails** with a proxy or registry timeout — common on a VPN or a corporate network —
+that is not this project. `./run` says so and gives you the alternatives rather than passing
+Docker's raw error through. Behind a registry mirror, point it somewhere reachable:
 
 ```sh
-composer test:known-failure
+LEDGER_PHP_IMAGE=your.mirror/php:8.4-cli LEDGER_COMPOSER_IMAGE=your.mirror/composer:2 ./run --docker
 ```
 
-**1 test, expected to FAIL.** That is the correct result — the brief asks for a failing test
-against my own design, and this is it:
+If you have PHP 8.4 locally, `./run --local` sidesteps the registry entirely.
 
-```
-Tests: 1, Assertions: 1, Failures: 1.
-```
-
-It is tagged `#[Group('known-failure')]` and excluded from `composer test` by `phpunit.xml`.
-What it reveals is in [The failing test](#the-failing-test) below.
-
-Equivalent:
+### If you have PHP 8.4+
 
 ```sh
-vendor/bin/phpunit --group known-failure
+./run --local
 ```
 
-### The replay itself
+or drive Composer directly — again, no global install needed:
 
 ```sh
-composer replay                 # per-day table
-php bin/replay --format=json    # machine-readable, what the golden test asserts against
-php bin/replay --duplicates     # every event emitted twice; the figures must not move
-php bin/replay --help
+php composer.phar install
+php composer.phar test               # 543 tests, expected green
+php composer.phar test:golden        # 32 tests, expected green
+php composer.phar test:known-failure # expected to FAIL — see below
+php bin/replay                       # per-day table
+php bin/replay --format=json         # machine-readable
+php bin/replay --duplicates          # every event twice; figures must not move
 ```
+
+**PHP 8.4 is the version this project is built and verified against.** Every figure, every test
+result and every number quoted in these documents was produced on it, and `./run --docker` pins
+`php:8.4-cli` so you get the same result rather than a similar one.
+
+Older versions will not work — the code relies on `readonly` class inheritance and would fail in
+ways that look like bugs in the ledger rather than in your runtime, so `./run` refuses anything
+below 8.4 instead of letting you find out the hard way. Newer versions are simply not what this
+was verified on; the suite does pass on 8.5.10, but the Docker path deliberately does not use it.
+
+### About the deliberately failing test
+
+`./run known-failure` **exits 0 when the test fails**, because failing is the correct outcome —
+the brief asks for a failing test and this is it. It exits non-zero if it ever starts passing,
+which would mean a documented decision changed. Details below.
 
 ## Results
 

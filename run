@@ -1,0 +1,240 @@
+#!/bin/sh
+#
+# One entry point for everything in this project, whether or not you have PHP.
+#
+#   ./run                  the full test suite
+#   ./run golden           the golden test alone
+#   ./run known-failure    the one test committed failing, on purpose
+#   ./run replay           the per-day report
+#   ./run help             all of it
+#
+# It picks an engine for you and says which one it picked:
+#
+#   local   — your own PHP, if it is 8.4 or newer
+#   docker  — the official php:8.4-cli image, if Docker is running
+#
+# Composer is not required: composer.phar is committed to this repository, and
+# dependencies install themselves on first run.
+#
+# Force an engine with --local or --docker if you want to check both.
+
+set -eu
+
+# Overridable so anyone behind a registry mirror can point these somewhere reachable.
+IMAGE="${LEDGER_PHP_IMAGE:-php:8.4-cli}"           # runs the code, at the version it targets
+COMPOSER_IMAGE="${LEDGER_COMPOSER_IMAGE:-composer:2}"  # installs deps: php:8.4-cli has no unzip, no ext-zip
+ENGINE=''
+CMD=''
+
+# ---------------------------------------------------------------- arguments
+
+for arg in "$@"; do
+    case "$arg" in
+        --local)  ENGINE='local' ;;
+        --docker) ENGINE='docker' ;;
+        -*)       printf 'Unknown option: %s\nTry: ./run help\n' "$arg" >&2; exit 2 ;;
+        *)        [ -z "$CMD" ] && CMD="$arg" ;;
+    esac
+done
+CMD="${CMD:-test}"
+
+case "$CMD" in
+    test|golden|known-failure|replay|replay:json|replay:duplicates|shell|help|-h|--help) ;;
+    *) printf 'Unknown command: %s\nTry: ./run help\n' "$CMD" >&2; exit 2 ;;
+esac
+
+# ---------------------------------------------------------------- engine
+
+have_modern_php() {
+    command -v php >/dev/null 2>&1 && php -r 'exit(PHP_VERSION_ID >= 80400 ? 0 : 1);' 2>/dev/null
+}
+
+have_docker() {
+    command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
+
+choose_engine() {
+    # Local PHP is preferred when it is new enough, purely because it is faster.
+    # An older PHP is not "close enough": this code uses 8.4 property hooks and
+    # readonly-class inheritance, and would fail in ways that look like our bugs.
+    if have_modern_php; then echo 'local'; return; fi
+    if have_docker; then echo 'docker'; return; fi
+    echo 'none'
+}
+
+[ -n "$ENGINE" ] || ENGINE="$(choose_engine)"
+
+if [ "$ENGINE" = 'none' ]; then
+    cat >&2 <<'MSG'
+Neither PHP 8.4+ nor a running Docker daemon was found, and this project needs one.
+
+  Docker (nothing else to install):
+      start Docker Desktop, then re-run  ./run
+
+  PHP directly:
+      macOS     brew install php@8.4
+      Debian    sudo apt install php8.4-cli php8.4-xml php8.4-mbstring
+      then      ./run
+
+Composer is NOT needed either way — composer.phar is committed here.
+MSG
+    exit 1
+fi
+
+if [ "$ENGINE" = 'local' ] && ! have_modern_php; then
+    if command -v php >/dev/null 2>&1; then
+        printf 'Local PHP is %s; this project needs 8.4+. Try: ./run %s --docker\n' \
+            "$(php -r 'echo PHP_VERSION;')" "$CMD" >&2
+    else
+        printf 'No local PHP found. Try: ./run %s --docker\n' "$CMD" >&2
+    fi
+    exit 1
+fi
+
+if [ "$ENGINE" = 'docker' ] && ! have_docker; then
+    echo 'Docker is not running. Start Docker Desktop, or use: ./run --local' >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------- execution
+
+# Runs a shell snippet against whichever engine was chosen. The Docker branch is
+# a plain `docker run` on the official image with this directory mounted — there
+# is no Dockerfile and no image to build, because there is nothing to install
+# beyond the dependencies, and vendor/ persists on the host between runs.
+# Only map the host user on Linux, where bind-mounted files would otherwise come
+# back owned by root. Docker Desktop already handles ownership on macOS.
+host_user() {
+    [ "$(uname -s)" = 'Linux' ] && printf -- '--user %s:%s' "$(id -u)" "$(id -g)"
+}
+
+# Docker's own error for an unreachable registry is a raw proxy timeout naming an IP,
+# which tells a reader nothing about what to do next. Check the cache first, pull only if
+# needed, and if that fails say what actually happened and what the alternatives are.
+ensure_image() {
+    _img="$1"
+    docker image inspect "$_img" >/dev/null 2>&1 && return 0
+
+    printf 'Fetching %s (first time only)...\n' "$_img"
+    docker pull "$_img" && return 0
+
+    printf '\nCould not fetch the Docker image "%s".\n\n' "$_img" >&2
+    printf 'Docker could not reach its registry. That is usually a VPN, a corporate proxy\n' >&2
+    printf 'or a transient fault — it is not a problem with this project.\n\n' >&2
+    printf 'Options, in order:\n\n' >&2
+    if have_modern_php; then
+        printf '  1. Skip Docker. You already have PHP %s:\n         ./run %s --local\n\n' \
+            "$(php -r 'echo PHP_VERSION;')" "$CMD" >&2
+    fi
+    printf '  2. Retry — these failures are often transient:\n         docker pull %s\n\n' "$_img" >&2
+    printf '  3. Behind a mirror? Point the script at it:\n' >&2
+    printf '         LEDGER_PHP_IMAGE=mirror/php:8.4-cli ./run %s --docker\n' "$CMD" >&2
+    exit 1
+}
+
+run_php() {
+    if [ "$ENGINE" = 'local' ]; then
+        sh -c "$1"
+    else
+        ensure_image "$IMAGE"
+        # shellcheck disable=SC2046,SC2086
+        docker run --rm -i \
+            -v "$PWD":/app -w /app \
+            $(host_user) "$IMAGE" sh -c "$1"
+    fi
+}
+
+install_dependencies() {
+    [ -f vendor/autoload.php ] && return 0
+    printf 'Installing dependencies (first run only)...\n\n'
+
+    if [ "$ENGINE" = 'local' ]; then
+        php composer.phar install --no-interaction --no-progress
+    else
+        # Deliberately a different image from the one that runs the code.
+        # php:8.4-cli ships neither ext-zip nor an unzip binary, so Composer
+        # cannot extract a single package in it — it fails on the first one.
+        # The official composer image has unzip, git and ext-zip; the code
+        # still runs on php:8.4-cli afterwards, at the version it targets.
+        ensure_image "$COMPOSER_IMAGE"
+        # shellcheck disable=SC2046,SC2086
+        docker run --rm -i \
+            -v "$PWD":/app -w /app \
+            -e COMPOSER_HOME=/tmp/composer \
+            $(host_user) --entrypoint composer "$COMPOSER_IMAGE" \
+            install --no-interaction --no-progress
+    fi
+    printf '\n'
+}
+
+# ---------------------------------------------------------------- commands
+
+case "$CMD" in
+    help|-h|--help)
+        cat <<'MSG'
+./run [command] [--local|--docker]
+
+  test              The full suite. 543 tests, expected green.       (default)
+  golden            The golden test alone. 32 tests, expected green.
+  known-failure     The one test committed failing, deliberately.
+                    Failing IS the expected result; this command exits 0
+                    when it fails and non-zero if it ever starts passing.
+  replay            The per-day report: balances, fees, authorizations, errors.
+  replay:json       The same report, machine-readable.
+  replay:duplicates Every event emitted twice. The figures must not move.
+  shell             An interactive shell in the chosen environment.
+  help              This.
+
+Engine is chosen automatically: your own PHP if it is 8.4+, otherwise Docker.
+Override with --local or --docker. Composer is not required.
+MSG
+        exit 0
+        ;;
+esac
+
+printf '→ engine: %s' "$ENGINE"
+[ "$ENGINE" = 'docker' ] && printf ' (%s)' "$IMAGE"
+printf '\n\n'
+
+case "$CMD" in
+    test)
+        install_dependencies
+        run_php 'php composer.phar test'
+        ;;
+    golden)
+        install_dependencies
+        run_php 'php composer.phar test:golden'
+        ;;
+    known-failure)
+        install_dependencies
+        printf 'This test is committed failing on purpose. A failure here is correct.\n\n'
+        if run_php 'php composer.phar test:known-failure'; then
+            printf '\n!! It PASSED. That is unexpected — see REJECTED.md, criterion 6.\n' >&2
+            exit 1
+        fi
+        printf '\n✓ Failed as designed. See the README, "The failing test".\n'
+        ;;
+    replay)
+        install_dependencies
+        run_php 'php bin/replay'
+        ;;
+    replay:json)
+        install_dependencies
+        run_php 'php bin/replay --format=json'
+        ;;
+    replay:duplicates)
+        install_dependencies
+        run_php 'php bin/replay --duplicates'
+        ;;
+    shell)
+        install_dependencies
+        if [ "$ENGINE" = 'local' ]; then
+            printf 'Already in your own shell — PHP is on your PATH.\n'
+        else
+            ensure_image "$IMAGE"
+            # shellcheck disable=SC2046,SC2086
+            exec docker run --rm -it -v "$PWD":/app -w /app \
+                $(host_user) "$IMAGE" sh
+        fi
+        ;;
+esac

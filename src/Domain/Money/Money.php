@@ -70,6 +70,10 @@ final readonly class Money implements \Stringable
             $normalised = '0';
         }
 
+        if (strlen($normalised) > strlen((string)PHP_INT_MAX)) {
+            throw ArithmeticOverflow::forAmount($amount);
+        }
+
         $minor = (int)$normalised;
         if ((string)$minor !== $normalised) {
             throw ArithmeticOverflow::forAmount($amount);

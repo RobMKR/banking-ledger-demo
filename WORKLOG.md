@@ -184,3 +184,7 @@ mtimes afterwards — the only two edits made after the fact.
 - **00:26** — Acted on a cold external review — a reviewer given the brief and the repo and no
   other context. It found things I had missed, and I verified every one before fixing rather than
   taking its word.
+- **21:36** — Made the project runnable by someone with neither Composer nor PHP. `./run` is the
+  single entry point; it picks your PHP if it is 8.4+, otherwise Docker, and says which it picked.
+  `composer.phar` is committed (3.6 MB, downloaded through the official installer with its SHA-384
+  signature verified before execution), so nothing needs installing globally either way.
